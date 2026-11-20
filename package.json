@@ -1,0 +1,9 @@
+{
+  "name": "tropfen",
+  "private": true,
+  "type": "module",
+  "description": "Kleine Offline-Web-App zum Abhaken stündlicher Augentropfen",
+  "scripts": {
+    "test": "node --test"
+  }
+}

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="de" data-theme="dunkel">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tropfen</title>
+  <meta name="description" content="Stündliche Augentropfen abhaken">
+  <meta name="theme-color" content="#141311">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Tropfen">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <script>
+    // Thema vor dem ersten Zeichnen setzen, damit nachts nichts hell aufblitzt
+    try {
+      var e = (JSON.parse(localStorage.getItem('tropfen')) || {}).einstellungen || {};
+      var m = e.dunkel || 'immer', h = new Date().getHours();
+      var d = m === 'immer' || (m === 'auto' && (h >= 21 || h < 7 || matchMedia('(prefers-color-scheme: dark)').matches));
+      document.documentElement.dataset.theme = d ? 'dunkel' : 'hell';
+    } catch (_) {}
+  </script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <clipPath id="unten-haelfte"><rect x="0" y="13" width="24" height="12"/></clipPath>
+      <symbol id="i-tropfen" viewBox="0 0 24 24"><path d="M12 2.8C9.6 6.3 5.5 11 5.5 15a6.5 6.5 0 0 0 13 0c0-4-4.1-8.7-6.5-12.2Z"/></symbol>
+      <symbol id="i-salbe" viewBox="0 0 24 24"><path d="M3.5 15.5c2.6-4.6 5.4-4.6 8.2-1.3 2.8 3.3 5.6 3.3 8.8-1.7" fill="none" stroke-width="3.6" stroke-linecap="round"/></symbol>
+      <symbol id="i-haken" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-zahnrad" viewBox="0 0 24 24"><g fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4 1a7.7 7.7 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A7.7 7.7 0 0 0 7 6.5l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-1a7.7 7.7 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.7 7.7 0 0 0 2.6-1.5l2.4 1 2-3.4Z"/></g></symbol>
+      <symbol id="i-zurueck" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-vor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    </defs>
+  </svg>
+
+  <header class="kopf">
+    <p class="datum" id="datum"></p>
+    <button class="icon-knopf" data-aktion="einstellungen" aria-label="Einstellungen">
+      <svg class="ico"><use href="#i-zahnrad"/></svg>
+    </button>
+  </header>
+
+  <main id="inhalt">
+    <section class="naechste" id="naechste" aria-live="polite"></section>
+    <p class="hinweis-beispiel" id="beispiel" hidden>
+      Das ist ein Beispielplan. Lade deinen Plan unter Einstellungen → Plan importieren.
+    </p>
+    <section id="offen" class="block" hidden></section>
+    <section class="block">
+      <h2 class="ueberschrift">Essen und Visite</h2>
+      <div class="ereignisse" id="ereignisse"></div>
+    </section>
+    <section class="block">
+      <div class="tag-kopf">
+        <button class="icon-knopf" data-aktion="tag" data-wert="-1" aria-label="Vorheriger Tag"><svg class="ico"><use href="#i-zurueck"/></svg></button>
+        <h2 class="ueberschrift" id="tag-titel">Heute</h2>
+        <button class="icon-knopf" data-aktion="tag" data-wert="1" aria-label="Nächster Tag"><svg class="ico"><use href="#i-vor"/></svg></button>
+      </div>
+      <ol class="zeitleiste" id="zeitleiste"></ol>
+    </section>
+    <p class="fuss">Persönliche Gedächtnisstütze, kein Medizinprodukt. Es gelten die Anweisungen von Station und Ärzten.</p>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden>
+    <span id="toast-text"></span>
+    <button class="toast-knopf" data-aktion="rueckgaengig">Rückgängig</button>
+  </div>
+
+  <div class="leiste" id="leiste">
+    <button class="knopf-nebel" data-aktion="nicht-alles">Nicht alles …</button>
+    <button class="haupt" id="haupt" data-aktion="alles">
+      <svg class="haupt-ico"><use href="#i-haken"/></svg>
+      <span class="haupt-text"><span class="haupt-runde" id="haupt-runde"></span><span class="haupt-label">Alles bekommen</span></span>
+    </button>
+  </div>
+
+  <div class="schleier" id="schleier" hidden></div>
+  <section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-titel" hidden></section>
+  <input type="file" id="datei" accept="application/json,.json" hidden>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

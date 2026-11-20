@@ -1,0 +1,7 @@
+# Eigene Daten nie committen
+*-backup-*.json
+mein-plan.json
+*.ics
+.claude/
+.DS_Store
+Thumbs.db
