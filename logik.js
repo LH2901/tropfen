@@ -1,6 +1,6 @@
 // Datenmodell und daraus abgeleitete Ansichten. Reine Funktionen, ohne DOM und ohne Speicherzugriff.
 import { BEISPIELPLAN } from './plan.js';
-import { STANDARD_TOLERANZEN, plusStunden } from './zuordnung.js';
+import { STANDARD_TOLERANZEN, plusStunden, ALLE_STUNDEN } from './zuordnung.js';
 
 export const DATEN_VERSION = 1;
 const STUNDE = 60 * 60 * 1000;
@@ -116,6 +116,12 @@ export function letzteRunde(runden) {
   return ausSchluessel(keys[keys.length - 1]);
 }
 
+/** Stunden, zu denen laut Plan mindestens ein Mittel fällig ist (aufsteigend). Leerer Plan: jede Stunde. */
+export function rundenStunden(plan) {
+  const menge = new Set(plan.mittel.flatMap((m) => m.stunden));
+  return menge.size ? [...menge].sort((a, b) => a - b) : [...ALLE_STUNDEN];
+}
+
 export function faelligeMittel(plan, stunde) {
   return plan.mittel.filter((m) => m.stunden.includes(stunde));
 }
@@ -155,13 +161,16 @@ export function rundenStatus(e) {
 }
 
 /**
- * Alle 24 Runden eines Tages mit Status.
+ * Runden eines Tages mit Status: alle Plan-Stunden plus Stunden, für die es einen Eintrag gibt.
  * Status ohne Eintrag: 'kommt' (Zukunft), 'faellig', 'ueberfaellig', 'keine' (keine Angabe).
  */
 export function tagesZeitleiste(zustand, tag, jetzt, ueberfaelligNach = 15) {
   const letzte = letzteRunde(zustand.runden);
   const zeilen = [];
-  for (let h = 0; h < 24; h++) {
+  const tagKey = schluessel(tag).slice(0, 10);
+  const mitEintrag = Object.keys(zustand.runden).filter((k) => k.startsWith(tagKey)).map((k) => Number(k.slice(11)));
+  const stunden = [...new Set([...rundenStunden(zustand.plan), ...mitEintrag])].sort((a, b) => a - b);
+  for (const h of stunden) {
     const runde = new Date(tag.getFullYear(), tag.getMonth(), tag.getDate(), h);
     const eintrag = zustand.runden[schluessel(runde)];
     let status;
@@ -328,13 +337,14 @@ const icsDatum = (d) => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDa
 const icsUtc = (d) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 
 /**
- * Je volle Stunde von `von` bis einschließlich `bis` ein täglich wiederkehrendes
+ * Je Runde (`stunden`) von `von` bis einschließlich `bis` ein täglich wiederkehrendes
  * 5-Minuten-Ereignis mit Alarm zur Startzeit. Zeiten sind „floating“ (Gerätezeit).
  */
-export function icsErzeugen(von, bis, start, kennung = 'tropfen') {
+export function icsErzeugen(von, bis, start, kennung = 'tropfen', stunden = ALLE_STUNDEN) {
   const z = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//tropfen//DE', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'];
   const stempel = icsUtc(start);
   for (let h = von; h <= bis; h++) {
+    if (!stunden.includes(h)) continue;
     const beginn = new Date(start.getFullYear(), start.getMonth(), start.getDate(), h, 0);
     const ende = new Date(beginn.getTime() + 5 * MINUTE);
     z.push('BEGIN:VEVENT', `UID:${kennung}-${pad(h)}-${stempel}@tropfen`, `DTSTAMP:${stempel}`,

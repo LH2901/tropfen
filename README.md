@@ -1,6 +1,6 @@
 # Tropfen
 
-Kleine Web-App für das iPhone zum Abhaken stündlicher Augentropfen, mit Offen-Liste, Tageszeitleiste sowie Essen und Visite (mit Notizen zur Visite).
+Kleine Web-App für das iPhone zum Abhaken von Augentropfen nach festem Plan (stündlich, alle 2 Stunden oder beliebige Stunden), mit Offen-Liste, Tageszeitleiste sowie Essen und Visite (mit Notizen zur Visite).
 Läuft offline. Alle Daten bleiben auf dem Gerät.
 
 Persönliche Gedächtnisstütze, kein Medizinprodukt. Es gelten immer die Anweisungen von Station und Ärzten.
@@ -25,7 +25,7 @@ App schließen (vom unteren Rand nach oben wischen und die App wegschieben) und 
 
 ## Erinnerungen
 
-Einstellungen → **Erinnerungen in Kalender übernehmen** erzeugt für jede volle Stunde im gewählten Zeitraum einen täglichen 5-Minuten-Termin „Augentropfen“ mit Hinweis.
+Einstellungen → **Erinnerungen in Kalender übernehmen** erzeugt für jede Runde laut Plan im gewählten Zeitraum einen täglichen 5-Minuten-Termin „Augentropfen“ mit Hinweis.
 Im Teilen-Menü „Kalender“ wählen. Falls es dort fehlt: „In Dateien sichern“, die Datei in der Dateien-App antippen und „Alle hinzufügen“ wählen.
 Am besten einen eigenen Kalender „Tropfen“ wählen. Zum Entfernen löschst du später diesen Kalender (Kalender-App → Kalender → Info → Kalender löschen).
 

@@ -110,6 +110,52 @@ test('Frühe Toleranz ist einstellbar', () => {
   assert.equal(zuordnen(um(9, 30), neunUhr, { frueh: 30 }).art, 'normal');
 });
 
+// Plan alle 2 Stunden: Runden nur zu geraden Stunden
+const GERADE = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22];
+const vierzehn = um(14);
+
+test('2 Stunden: nach der 14-Uhr-Runde ist 16 Uhr dran, nicht 15 Uhr', () => {
+  const r = zuordnen(um(15, 50), vierzehn, {}, GERADE);
+  assert.equal(r.art, 'normal');
+  assert.deepEqual(r.runde, um(16));
+});
+
+test('2 Stunden: zu früh gilt relativ zur 16-Uhr-Runde', () => {
+  const r = zuordnen(um(15, 10), vierzehn, {}, GERADE);
+  assert.equal(r.art, 'frueh');
+  assert.deepEqual(r.runde, um(16));
+  assert.equal(r.minutenBisFaellig, 50);
+  assert.equal(zuordnen(um(15, 20), vierzehn, {}, GERADE).art, 'normal');
+});
+
+test('2 Stunden: auch eine Stunde zu spät zählt noch zur erwarteten Runde, ohne Lücke', () => {
+  const r = zuordnen(um(17, 0), vierzehn, {}, GERADE);
+  assert.equal(r.art, 'normal');
+  assert.deepEqual(r.runde, um(16));
+  // Die letzten 15 Minuten vor 18 Uhr gehören schon zur 18-Uhr-Runde
+  assert.deepEqual(zuordnen(um(17, 45), vierzehn, {}, GERADE).runde, um(16));
+  const spaet = zuordnen(um(17, 46), vierzehn, {}, GERADE);
+  assert.equal(spaet.art, 'spaet');
+  assert.deepEqual(spaet.runde, um(18));
+  assert.deepEqual(stunden(spaet.luecken), [16]);
+});
+
+test('2 Stunden: Lücken nur zu Plan-Stunden, auch über Mitternacht', () => {
+  const r = zuordnen(um(2, 5, 21), um(20, 0, 20), {}, GERADE);
+  assert.equal(r.art, 'spaet');
+  assert.deepEqual(r.runde, um(2, 0, 21));
+  assert.deepEqual(r.luecken, [um(22, 0, 20), um(0, 0, 21)]);
+});
+
+test('2 Stunden: erste Nutzung und alte Runde zu ungerader Stunde', () => {
+  assert.deepEqual(zuordnen(um(15, 0), null, {}, GERADE).runde, um(14));
+  assert.deepEqual(zuordnen(um(15, 50), null, {}, GERADE).runde, um(16));
+  // Letzter Eintrag stammt noch aus dem stündlichen Plan (13 Uhr) → als Nächstes 14 Uhr
+  const r = zuordnen(um(14, 5), um(13), {}, GERADE);
+  assert.equal(r.art, 'normal');
+  assert.deepEqual(r.runde, um(14));
+});
+
 test('Lücken über Mitternacht werden korrekt aufgezählt', () => {
   const r = zuordnen(um(1, 10, 21), um(22, 0, 20));
   assert.equal(r.art, 'spaet');

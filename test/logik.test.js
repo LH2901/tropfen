@@ -3,8 +3,32 @@ import assert from 'node:assert/strict';
 import {
   leererZustand, migrieren, importLesen, exportErzeugen, schluessel, ausSchluessel, letzteRunde,
   rundeErfassen, rundeAusgefallen, rundeUnklar, rundenStatus, tagesZeitleiste, offenePunkte,
-  ueblicheZeit, ueblichText, icsErzeugen, rundenDetail, ereignisVerlauf, notizSetzen, visiten, tagesText
+  ueblicheZeit, ueblichText, icsErzeugen, rundenDetail, ereignisVerlauf, notizSetzen, visiten, tagesText,
+  rundenStunden
 } from '../logik.js';
+
+test('Plan alle 2 Stunden: Runden-Stunden, Zeitleiste mit altem Eintrag, Kalender', () => {
+  const zweiStd = { mittel: [
+    { id: 'v', name: 'V', kurz: 'V', art: 'tropfen', stunden: [2, 6, 10, 14, 18, 22], nachholbar: false },
+    { id: 'p', name: 'P', kurz: 'P', art: 'tropfen', stunden: [0, 4, 8, 12, 16, 20], nachholbar: false },
+    { id: 's', name: 'S', kurz: 'S', art: 'salbe', stunden: [8, 12, 14], nachholbar: true }
+  ] };
+  assert.deepEqual(rundenStunden(zweiStd), [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22]);
+  assert.equal(rundenStunden(plan).length, 24);
+
+  // Eintrag von 13 Uhr stammt noch aus dem stündlichen Plan und bleibt sichtbar
+  const z = { ...leererZustand(), plan: zweiStd, runden: {
+    '2026-11-20T13': { zeit: um(13, 2).toISOString(), mittel: { alt: 'ja' } },
+    '2026-11-20T14': { zeit: um(14, 3).toISOString(), mittel: { v: 'ja', s: 'ja' } }
+  } };
+  const zeilen = tagesZeitleiste(z, um(0), um(16, 30));
+  assert.deepEqual(zeilen.map((x) => x.runde.getHours()), [0, 2, 4, 6, 8, 10, 12, 13, 14, 16, 18, 20, 22]);
+  assert.deepEqual(zeilen.filter((x) => x.runde.getHours() >= 13 && x.runde.getHours() <= 18).map((x) => x.status),
+    ['erledigt', 'erledigt', 'ueberfaellig', 'kommt']);
+
+  const ics = icsErzeugen(10, 19, um(9), 'tropfen', rundenStunden(zweiStd));
+  assert.equal((ics.match(/BEGIN:VEVENT/g) || []).length, 5); // 10, 12, 14, 16, 18
+});
 
 test('Visite-Notiz: setzen, kürzen, leeren; Liste neueste zuerst; Tagesübersicht', () => {
   const v1 = um(9, 40, 19).toISOString();

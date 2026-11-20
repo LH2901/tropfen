@@ -5,10 +5,10 @@ import {
   faelligeMittel, mittelNach, rundeErfassen, rundeAusgefallen, rundeUnklar, rundenStatus,
   tagesZeitleiste, offenePunkte, ueblicheZeit, ereignisseAm, EREIGNIS_TYPEN, uhrzeit, rundenName,
   dauer, ueblichText, statusText, rundenDetail, tagesText, icsErzeugen, tagesSchluessel,
-  ereignisVerlauf, minutenAlsUhrzeit, notizSetzen, visiten
+  ereignisVerlauf, minutenAlsUhrzeit, notizSetzen, visiten, rundenStunden
 } from './logik.js';
 
-const APP_VERSION = '1.2.1';
+const APP_VERSION = '1.3.0';
 const SPEICHER_KEY = 'tropfen';
 const UEBERFAELLIG_NACH = 15; // Minuten nach der vollen Stunde
 
@@ -119,7 +119,7 @@ function render() {
 
 function renderNaechste(jetzt) {
   const letzte = letzteRunde(z.runden);
-  const r = zuordnen(jetzt, letzte, toleranzen());
+  const r = zuordnen(jetzt, letzte, toleranzen(), rundenStunden(z.plan));
   const mittel = faelligeMittel(z.plan, r.runde.getHours());
   const seit = Math.floor((jetzt - r.runde) / 60000);
   let abstand = '';
@@ -270,7 +270,7 @@ function schalterUmlegen(el) {
 
 function erfassenStart(fehlend = []) {
   const jetzt = new Date();
-  const r = zuordnen(jetzt, letzteRunde(z.runden), toleranzen());
+  const r = zuordnen(jetzt, letzteRunde(z.runden), toleranzen(), rundenStunden(z.plan));
   if (r.art === 'frueh') {
     const min = r.minutenBisFaellig;
     bestaetigen({
@@ -297,7 +297,7 @@ function erfassen(r, jetzt, fehlend) {
 }
 
 function nichtAllesSheet() {
-  const r = zuordnen(new Date(), letzteRunde(z.runden), toleranzen());
+  const r = zuordnen(new Date(), letzteRunde(z.runden), toleranzen(), rundenStunden(z.plan));
   const mittel = faelligeMittel(z.plan, r.runde.getHours());
   sheetOeffnen(`${rundenName(r.runde)}`, `
     <p class="leise">Tippe weg, was gefehlt hat.</p>
@@ -530,7 +530,7 @@ function einstellungenSheet() {
     <div class="feld"><label for="s-von">Von</label><select id="s-von">${stundenOptionen(e.erinnerungVon)}</select></div>
     <div class="feld"><label for="s-bis">Bis einschließlich</label><select id="s-bis">${stundenOptionen(e.erinnerungBis)}</select></div>
     <div class="knoepfe"><button class="knopf" data-aktion="ics">Erinnerungen in Kalender übernehmen</button></div>
-    <p class="leise">Erzeugt je volle Stunde einen täglichen 5-Minuten-Termin „Augentropfen“ mit Hinweis.
+    <p class="leise">Erzeugt zu jeder Runde laut Plan einen täglichen 5-Minuten-Termin „Augentropfen“ mit Hinweis.
       Im Teilen-Menü „Kalender“ wählen oder „In Dateien sichern“ und die Datei dort antippen, dann „Alle hinzufügen“.
       Tipp: in einen eigenen Kalender „Tropfen“ übernehmen. Zum Entfernen löschst du später einfach diesen Kalender.</p>
 
@@ -553,7 +553,7 @@ function einstellungenSheet() {
       const von = Number(z.einstellungen.erinnerungVon);
       const bis = Number(z.einstellungen.erinnerungBis);
       if (bis < von) { toast('„Bis“ muss nach „Von“ liegen.', false); return; }
-      await dateiAusgeben('tropfen-erinnerungen.ics', icsErzeugen(von, bis, new Date()), 'text/calendar');
+      await dateiAusgeben('tropfen-erinnerungen.ics', icsErzeugen(von, bis, new Date(), 'tropfen', rundenStunden(z.plan)), 'text/calendar');
     },
     export: async () => {
       const ok = await dateiAusgeben(`tropfen-backup-${tagesSchluessel(new Date())}.json`, exportErzeugen(z), 'application/json');
