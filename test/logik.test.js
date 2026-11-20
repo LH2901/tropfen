@@ -3,8 +3,33 @@ import assert from 'node:assert/strict';
 import {
   leererZustand, migrieren, importLesen, exportErzeugen, schluessel, ausSchluessel, letzteRunde,
   rundeErfassen, rundeAusgefallen, rundeUnklar, rundenStatus, tagesZeitleiste, offenePunkte,
-  ueblicheZeit, ueblichText, icsErzeugen, rundenDetail, ereignisVerlauf
+  ueblicheZeit, ueblichText, icsErzeugen, rundenDetail, ereignisVerlauf, notizSetzen, visiten, tagesText
 } from '../logik.js';
+
+test('Visite-Notiz: setzen, kürzen, leeren; Liste neueste zuerst; Tagesübersicht', () => {
+  const v1 = um(9, 40, 19).toISOString();
+  const v2 = um(10, 15, 20).toISOString();
+  const ereignisse = [
+    { typ: 'visite', zeit: v1 },
+    { typ: 'fruehstueck', zeit: um(7, 30, 20).toISOString() },
+    { typ: 'visite', zeit: v2 }
+  ];
+  assert.equal(notizSetzen(ereignisse, 'visite', v2, '  Druck ok.\nTropfen ab Montag reduzieren.  '), true);
+  assert.equal(ereignisse[2].notiz, 'Druck ok.\nTropfen ab Montag reduzieren.');
+  assert.equal(notizSetzen(ereignisse, 'visite', 'gibt-es-nicht', 'x'), false);
+  notizSetzen(ereignisse, 'visite', v1, 'kurz');
+  notizSetzen(ereignisse, 'visite', v1, '   ');
+  assert.equal('notiz' in ereignisse[0], false);
+
+  assert.deepEqual(visiten(ereignisse).map((e) => e.zeit), [v2, v1]);
+  assert.deepEqual(visiten(ereignisse, um(0, 0, 20)).map((e) => e.zeit), [v2]);
+
+  const zustand = { ...leererZustand(), plan, ereignisse };
+  const text = tagesText(zustand, um(0, 0, 20), um(23, 0, 20));
+  assert.match(text, /Frühstück 7:30, Visite 10:15/);
+  assert.match(text, /\n\nVisite 10:15:\nDruck ok\.\nTropfen ab Montag reduzieren\.$/);
+  assert.doesNotMatch(tagesText(zustand, um(0, 0, 19), um(23, 0, 20)), /Visite 9:40:/);
+});
 
 const um = (h, m = 0, tag = 20) => new Date(2026, 10, tag, h, m);
 const plan = {

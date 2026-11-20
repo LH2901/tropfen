@@ -5,10 +5,10 @@ import {
   faelligeMittel, mittelNach, rundeErfassen, rundeAusgefallen, rundeUnklar, rundenStatus,
   tagesZeitleiste, offenePunkte, ueblicheZeit, ereignisseAm, EREIGNIS_TYPEN, uhrzeit, rundenName,
   dauer, ueblichText, statusText, rundenDetail, tagesText, icsErzeugen, tagesSchluessel,
-  ereignisVerlauf, minutenAlsUhrzeit
+  ereignisVerlauf, minutenAlsUhrzeit, notizSetzen, visiten
 } from './logik.js';
 
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 const SPEICHER_KEY = 'tropfen';
 const UEBERFAELLIG_NACH = 15; // Minuten nach der vollen Stunde
 
@@ -51,6 +51,8 @@ function toast(text, mitRueckgaengig = true) {
 
 function rueckgaengig() {
   if (!rueckStand) return;
+  // Ein offenes Sheet gehört zur rückgängig gemachten Aktion (Lückenfragen, Visite-Notiz)
+  if (!$('sheet').hidden) sheetSchliessen();
   z = migrieren(JSON.parse(rueckStand));
   rueckStand = null;
   speichern();
@@ -186,9 +188,10 @@ function renderEreignisse(jetzt) {
   $('ereignisse').innerHTML = EREIGNIS_TYPEN.map((t) => {
     const heute = ereignisseAm(z.ereignisse, t.id, jetzt);
     const zuletzt = heute[heute.length - 1];
+    const mitNotiz = heute.some((e) => e.notiz) ? ' · Notiz' : '';
     return `<button class="ereignis${zuletzt ? ' erfasst' : ''}" data-aktion="ereignis" data-typ="${t.id}">
       <span class="ereignis-name">${t.name}</span>
-      ${zuletzt ? `<span class="ereignis-heute">heute ${uhrzeit(new Date(zuletzt.zeit))}</span>` : ''}
+      ${zuletzt ? `<span class="ereignis-heute">heute ${uhrzeit(new Date(zuletzt.zeit))}${mitNotiz}</span>` : ''}
       ${ueblichHtml(ueblicheZeit(z.ereignisse, t.id))}
     </button>`;
   }).join('');
@@ -415,23 +418,53 @@ function korrekturSheet(k) {
 
 // ---------- Essen und Visite ----------
 
+// Notizfeld zur Visite; gespeichert wird bei jeder Eingabe, damit beim Schließen nichts verloren geht
+function notizFeld(e, i = 0) {
+  return `<div class="visite-notiz-feld"><label for="n-${i}">Was wurde besprochen?</label>
+    <textarea id="n-${i}" rows="5" data-zeit="${e.zeit}" autocapitalize="sentences">${esc(e.notiz || '')}</textarea></div>`;
+}
+
+function notizenVerbinden() {
+  for (const feld of $('sheet').querySelectorAll('textarea[data-zeit]')) {
+    feld.addEventListener('input', () => {
+      if (notizSetzen(z.ereignisse, 'visite', feld.dataset.zeit, feld.value)) speichern();
+    });
+  }
+}
+
+function notizSheet(e, beiSchliessen = null, neu = false) {
+  const d = new Date(e.zeit);
+  const tag = d.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
+  sheetOeffnen(`Visite · ${uhrzeit(d)}`, `
+    <p class="leise">${neu ? 'Eingetragen. Notiz nur, wenn du magst' : tag}. Wird beim Schreiben gespeichert.</p>
+    ${notizFeld(e)}
+    <div class="knoepfe"><button class="knopf primaer" data-aktion="fertig">Fertig</button></div>`, {
+    fertig: () => { sheetSchliessen(); render(); }
+  }, () => { render(); if (beiSchliessen) beiSchliessen(); });
+  notizenVerbinden();
+}
+
 function ereignisTippen(typ) {
   const t = EREIGNIS_TYPEN.find((x) => x.id === typ);
   const heute = ereignisseAm(z.ereignisse, typ, new Date());
   const neu = () => {
     merken();
     const jetzt = new Date();
-    z.ereignisse.push({ typ, zeit: jetzt.toISOString() });
+    const eintrag = { typ, zeit: jetzt.toISOString() };
+    z.ereignisse.push(eintrag);
     speichern(); render();
     toast(`${t.name} · ${uhrzeit(jetzt)}`);
+    if (typ === 'visite') notizSheet(eintrag, null, true);
   };
   if (!heute.length) { neu(); return; }
 
+  const istVisite = typ === 'visite';
   sheetOeffnen(t.name, `
-    <p class="leise">Heute erfasst. Uhrzeit ändern oder löschen:</p>
+    <p class="leise">Heute erfasst. ${istVisite ? 'Uhrzeit ändern, löschen oder Notiz ergänzen:' : 'Uhrzeit ändern oder löschen:'}</p>
     ${heute.map((e, i) => `<div class="feld"><label for="e-${i}">Um</label>
       <input id="e-${i}" type="time" value="${feldZeit(e.zeit)}" data-zeit="${e.zeit}">
-      <button class="knopf gefahr" data-aktion="loeschen" data-zeit="${e.zeit}">Löschen</button></div>`).join('')}
+      <button class="knopf gefahr" data-aktion="loeschen" data-zeit="${e.zeit}">Löschen</button></div>
+      ${istVisite ? notizFeld(e, i) : ''}`).join('')}
     <div class="knoepfe">
       <button class="knopf primaer" data-aktion="fertig">Fertig</button>
       <button class="knopf" data-aktion="nochmal">Noch einmal erfassen (jetzt)</button>
@@ -454,7 +487,8 @@ function ereignisTippen(typ) {
       speichern(); sheetSchliessen(); render();
     },
     nochmal: () => { sheetSchliessen(); neu(); }
-  });
+  }, render);
+  if (istVisite) notizenVerbinden();
 }
 
 // ---------- Einstellungen ----------
@@ -567,6 +601,16 @@ function verlaufSheet() {
     const u = ueblicheZeit(z.ereignisse, t.id);
     return `<td>${u ? `<span>~${minutenAlsUhrzeit(u.median)}</span>` : '<span class="leer">–</span>'}</td>`;
   }).join('');
+  const liste = visiten(z.ereignisse, verlauf[verlauf.length - 1].tag);
+  const notizen = liste.length ? `
+    <h3>Visite</h3>
+    <ul class="visite-notizen">${liste.map((e) => {
+      const d = new Date(e.zeit);
+      return `<li><button data-aktion="notiz" data-zeit="${e.zeit}">
+        <span class="vn-wann">${tagName(d)}, ${uhrzeit(d)}</span>
+        ${e.notiz ? `<span class="vn-text">${esc(e.notiz)}</span>` : '<span class="vn-text leer">Keine Notiz. Antippen zum Schreiben.</span>'}
+      </button></li>`;
+    }).join('')}</ul>` : '';
   sheetOeffnen('Verlauf', `
     <p class="leise">Erfasste Uhrzeiten, neuester Tag oben. Bis zu 14 Tage.</p>
     <table class="verlauf">
@@ -574,7 +618,13 @@ function verlaufSheet() {
       <tbody>${verlauf.map((v) => `<tr><th scope="row">${tagName(v.tag)}</th>${EREIGNIS_TYPEN.map((t) => `<td>${zelle(v.typen[t.id] || [])}</td>`).join('')}</tr>`).join('')}</tbody>
       <tfoot><tr><th scope="row">üblich</th>${ueblich}</tr></tfoot>
     </table>
-    <p class="leise">„üblich“ ist der Median der letzten 5 Tage, jeweils der erste Eintrag des Tages.</p>`);
+    <p class="leise">„üblich“ ist der Median der letzten 5 Tage, jeweils der erste Eintrag des Tages.</p>
+    ${notizen}`, {
+    notiz: (el) => {
+      const e = z.ereignisse.find((x) => x.typ === 'visite' && x.zeit === el.dataset.zeit);
+      if (e) notizSheet(e, verlaufSheet);
+    }
+  });
 }
 
 function uebersichtSheet() {

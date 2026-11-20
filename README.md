@@ -1,6 +1,6 @@
 # Tropfen
 
-Kleine Web-App für das iPhone zum Abhaken stündlicher Augentropfen, mit Offen-Liste, Tageszeitleiste sowie Essen und Visite.
+Kleine Web-App für das iPhone zum Abhaken stündlicher Augentropfen, mit Offen-Liste, Tageszeitleiste sowie Essen und Visite (mit Notizen zur Visite).
 Läuft offline. Alle Daten bleiben auf dem Gerät.
 
 Persönliche Gedächtnisstütze, kein Medizinprodukt. Es gelten immer die Anweisungen von Station und Ärzten.

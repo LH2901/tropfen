@@ -73,7 +73,7 @@ body::before {
   z-index: 30;
 }
 
-button, input, select { font: inherit; color: inherit; }
+button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; -webkit-user-select: none; user-select: none; }
 :focus-visible { outline: 3px solid var(--akzent); outline-offset: 2px; }
 
@@ -411,6 +411,30 @@ html.gesperrt .toast { bottom: auto; top: calc(env(safe-area-inset-top) + 12px);
   font-size: 1.125rem; /* ≥ 16px verhindert Zoom beim Fokussieren */
 }
 .feld input[type="number"] { width: 6rem; min-width: 0; text-align: right; }
+
+.visite-notiz-feld { padding: 16px 0 4px; }
+.visite-notiz-feld label { display: block; margin-bottom: 8px; color: var(--text-2); font-size: 1rem; }
+.visite-notiz-feld textarea {
+  display: block; width: 100%; min-height: 9.5em;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--linie-stark);
+  background: var(--grund);
+  font-size: 1.125rem; line-height: 1.45; /* ≥ 16px verhindert Zoom beim Fokussieren */
+  resize: vertical;
+}
+
+.visite-notizen { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--linie); }
+.visite-notizen button {
+  display: block; width: 100%; min-height: 60px;
+  padding: 14px 0;
+  border: 0; border-bottom: 1px solid var(--linie);
+  background: transparent; text-align: left;
+}
+.visite-notizen button:active { background: var(--flaeche-2); }
+.vn-wann { display: block; font-weight: 600; }
+.vn-text { display: block; margin-top: 4px; font-size: 1.0625rem; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.vn-text.leer { color: var(--text-2); }
 
 .segment { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 14px; background: var(--grund); }
 .segment button { min-height: 48px; border: 0; border-radius: 10px; background: transparent; font-weight: 500; }

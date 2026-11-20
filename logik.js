@@ -28,7 +28,7 @@ export const EREIGNIS_TYPEN = [
        unklar?: true                     // Lücke, Frage noch nicht beantwortet
      }
    },
-   ereignisse: [{ typ, zeit: ISO-String }],
+   ereignisse: [{ typ, zeit: ISO-String, notiz?: string }],   // notiz bisher nur bei Visite
    letztesBackup: ISO-String | null
  }
 */
@@ -239,6 +239,25 @@ export function ereignisVerlauf(ereignisse, tage = 14) {
   return liste;
 }
 
+/**
+ * Setzt die Notiz eines Eintrags, gefunden über Typ und Zeit. Leerer Text entfernt die Notiz.
+ * @returns {boolean} ob der Eintrag existiert
+ */
+export function notizSetzen(ereignisse, typ, zeit, text) {
+  const e = ereignisse.find((x) => x.typ === typ && x.zeit === zeit);
+  if (!e) return false;
+  const t = String(text ?? '').trim();
+  if (t) e.notiz = t; else delete e.notiz;
+  return true;
+}
+
+/** Alle Visiten ab dem Tag `ab` (oder alle), neueste zuerst. */
+export function visiten(ereignisse, ab = null) {
+  const grenze = ab ? new Date(ab.getFullYear(), ab.getMonth(), ab.getDate()) : null;
+  return ereignisse.filter((e) => e.typ === 'visite' && (!grenze || new Date(e.zeit) >= grenze))
+    .sort((a, b) => (a.zeit < b.zeit ? 1 : -1));
+}
+
 // ---------- Formatierung ----------
 
 export const uhrzeit = (d) => `${d.getHours()}:${pad(d.getMinutes())}`;
@@ -295,6 +314,9 @@ export function tagesText(zustand, tag, jetzt) {
   }
   const ev = EREIGNIS_TYPEN.flatMap((t) => ereignisseAm(zustand.ereignisse, t.id, tag).map((e) => `${t.name} ${uhrzeit(new Date(e.zeit))}`));
   if (ev.length) zeilen.push('', ev.join(', '));
+  for (const e of ereignisseAm(zustand.ereignisse, 'visite', tag)) {
+    if (e.notiz) zeilen.push('', `Visite ${uhrzeit(new Date(e.zeit))}:`, e.notiz);
+  }
   return zeilen.join('\n');
 }
 
