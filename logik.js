@@ -220,6 +220,25 @@ export function ereignisseAm(ereignisse, typ, tag) {
     .sort((a, b) => (a.zeit < b.zeit ? -1 : 1));
 }
 
+/**
+ * Verlauf von Essen und Visite: die letzten `tage` Tage mit mindestens einem Eintrag, neueste zuerst.
+ * @returns {{ tag: Date, typen: { [typ]: Date[] } }[]}
+ */
+export function ereignisVerlauf(ereignisse, tage = 14) {
+  const proTag = new Map();
+  for (const e of ereignisse) {
+    const d = new Date(e.zeit);
+    const k = tagesSchluessel(d);
+    if (!proTag.has(k)) {
+      proTag.set(k, { tag: new Date(d.getFullYear(), d.getMonth(), d.getDate()), typen: Object.fromEntries(EREIGNIS_TYPEN.map((t) => [t.id, []])) });
+    }
+    (proTag.get(k).typen[e.typ] ||= []).push(d);
+  }
+  const liste = [...proTag.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1)).slice(0, tage).map((x) => x[1]);
+  for (const t of liste) for (const zeiten of Object.values(t.typen)) zeiten.sort((a, b) => a - b);
+  return liste;
+}
+
 // ---------- Formatierung ----------
 
 export const uhrzeit = (d) => `${d.getHours()}:${pad(d.getMinutes())}`;

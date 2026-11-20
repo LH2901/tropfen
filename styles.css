@@ -196,6 +196,27 @@ main {
 .ereignis-ueblich { color: var(--text-2); font-size: 0.9375rem; line-height: 1.3; }
 .ereignis.erfasst { background: var(--flaeche); border-color: transparent; }
 
+.block-kopf { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.block-kopf .ueberschrift { margin: 0; }
+.text-knopf {
+  min-height: 48px; padding: 0 4px 0 16px;
+  border: 0; background: transparent;
+  color: var(--akzent-tinte);
+  font-size: 1.0625rem; font-weight: 600;
+}
+.text-knopf:active { opacity: 0.6; }
+
+.verlauf { width: 100%; margin-top: 16px; border-collapse: collapse; table-layout: fixed; }
+.verlauf th, .verlauf td { padding: 10px 2px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--linie); }
+.verlauf thead th { color: var(--text-2); font-size: 0.9375rem; font-weight: 500; }
+.verlauf abbr { text-decoration: none; }
+.verlauf thead th:first-child { width: 27%; }
+.verlauf tbody th, .verlauf tfoot th { font-weight: 600; font-size: 1rem; white-space: nowrap; }
+.verlauf td span { display: block; font-size: 1.0625rem; }
+.verlauf .leer { color: var(--text-2); }
+.verlauf tfoot th, .verlauf tfoot td { color: var(--text-2); font-size: 1rem; font-weight: 500; border-bottom: 0; }
+.verlauf tfoot td span { font-size: 1rem; }
+
 /* ---------- Zeitleiste ---------- */
 
 .tag-kopf { display: flex; align-items: center; justify-content: space-between; margin: 0 -12px 4px; }

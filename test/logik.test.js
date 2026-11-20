@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   leererZustand, migrieren, importLesen, exportErzeugen, schluessel, ausSchluessel, letzteRunde,
   rundeErfassen, rundeAusgefallen, rundeUnklar, rundenStatus, tagesZeitleiste, offenePunkte,
-  ueblicheZeit, ueblichText, icsErzeugen, rundenDetail
+  ueblicheZeit, ueblichText, icsErzeugen, rundenDetail, ereignisVerlauf
 } from '../logik.js';
 
 const um = (h, m = 0, tag = 20) => new Date(2026, 10, tag, h, m);
@@ -66,6 +66,22 @@ test('Übliche Zeit: Median der letzten 5 Tage, erster Eintrag je Tag', () => {
   assert.equal(u.anzahl, 5);
   assert.equal(ueblichText(u), 'üblich ~17:35 (17:30–17:50)');
   assert.equal(ueblichText(ueblicheZeit(ev, 'visite')), 'noch keine Daten');
+});
+
+test('Verlauf: Tage mit Einträgen, neueste zuerst, mehrere Einträge je Typ sortiert', () => {
+  const ev = [
+    { typ: 'visite', zeit: um(10, 30, 19).toISOString() },
+    { typ: 'abend', zeit: um(17, 35, 20).toISOString() },
+    { typ: 'visite', zeit: um(15, 0, 20).toISOString() },
+    { typ: 'visite', zeit: um(10, 10, 20).toISOString() },
+    { typ: 'fruehstueck', zeit: um(7, 40, 17).toISOString() }
+  ];
+  const v = ereignisVerlauf(ev);
+  assert.deepEqual(v.map((t) => t.tag.getDate()), [20, 19, 17]);
+  assert.deepEqual(v[0].typen.visite.map((d) => d.getHours()), [10, 15]);
+  assert.deepEqual(v[0].typen.fruehstueck, []);
+  assert.equal(ereignisVerlauf(ev, 2).length, 2);
+  assert.deepEqual(ereignisVerlauf([]), []);
 });
 
 test('Migration und Import', () => {

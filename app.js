@@ -4,10 +4,11 @@ import {
   leererZustand, migrieren, importLesen, exportErzeugen, schluessel, ausSchluessel, letzteRunde,
   faelligeMittel, mittelNach, rundeErfassen, rundeAusgefallen, rundeUnklar, rundenStatus,
   tagesZeitleiste, offenePunkte, ueblicheZeit, ereignisseAm, EREIGNIS_TYPEN, uhrzeit, rundenName,
-  dauer, ueblichText, statusText, rundenDetail, tagesText, icsErzeugen, tagesSchluessel
+  dauer, ueblichText, statusText, rundenDetail, tagesText, icsErzeugen, tagesSchluessel,
+  ereignisVerlauf, minutenAlsUhrzeit
 } from './logik.js';
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 const SPEICHER_KEY = 'tropfen';
 const UEBERFAELLIG_NACH = 15; // Minuten nach der vollen Stunde
 
@@ -543,6 +544,39 @@ function einstellungenSheet() {
   }
 }
 
+const KURZ_KOPF = { fruehstueck: 'Frühst.', mittag: 'Mittag', abend: 'Abend', visite: 'Visite' };
+
+function verlaufSheet() {
+  const verlauf = ereignisVerlauf(z.ereignisse, 14);
+  if (!verlauf.length) {
+    sheetOeffnen('Verlauf', '<p class="leise">Noch nichts erfasst. Tippe auf Frühstück, Mittagessen, Abendessen oder Visite, wenn es so weit ist.</p>');
+    return;
+  }
+  const heute = tagesSchluessel(new Date());
+  const gestern = tagesSchluessel(new Date(Date.now() - 864e5));
+  const tagName = (d) => {
+    const k = tagesSchluessel(d);
+    if (k === heute) return 'Heute';
+    if (k === gestern) return 'Gestern';
+    return `${['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][d.getDay()]} ${d.getDate()}.${d.getMonth() + 1}.`;
+  };
+  const zelle = (zeiten) => zeiten.length
+    ? zeiten.map((d) => `<span>${uhrzeit(d)}</span>`).join('')
+    : '<span class="leer" aria-label="kein Eintrag">–</span>';
+  const ueblich = EREIGNIS_TYPEN.map((t) => {
+    const u = ueblicheZeit(z.ereignisse, t.id);
+    return `<td>${u ? `<span>~${minutenAlsUhrzeit(u.median)}</span>` : '<span class="leer">–</span>'}</td>`;
+  }).join('');
+  sheetOeffnen('Verlauf', `
+    <p class="leise">Erfasste Uhrzeiten, neuester Tag oben. Bis zu 14 Tage.</p>
+    <table class="verlauf">
+      <thead><tr><th scope="col">Tag</th>${EREIGNIS_TYPEN.map((t) => `<th scope="col"><abbr title="${t.name}">${KURZ_KOPF[t.id]}</abbr></th>`).join('')}</tr></thead>
+      <tbody>${verlauf.map((v) => `<tr><th scope="row">${tagName(v.tag)}</th>${EREIGNIS_TYPEN.map((t) => `<td>${zelle(v.typen[t.id] || [])}</td>`).join('')}</tr>`).join('')}</tbody>
+      <tfoot><tr><th scope="row">üblich</th>${ueblich}</tr></tfoot>
+    </table>
+    <p class="leise">„üblich“ ist der Median der letzten 5 Tage, jeweils der erste Eintrag des Tages.</p>`);
+}
+
 function uebersichtSheet() {
   const jetzt = new Date();
   const tag = new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate() + tagVersatz);
@@ -605,6 +639,7 @@ const aktionen = {
   nachgeholt: (el) => offenMarkieren(el, 'nachgeholt'),
   entfaellt: (el) => offenMarkieren(el, 'entfaellt'),
   ereignis: (el) => ereignisTippen(el.dataset.typ),
+  verlauf: verlaufSheet,
   runde: (el) => korrekturSheet(el.dataset.k),
   tag: (el) => { tagVersatz = Math.min(0, tagVersatz + Number(el.dataset.wert)); render(); }
 };
