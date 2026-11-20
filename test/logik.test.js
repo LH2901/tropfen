@@ -82,6 +82,13 @@ test('Offen: nachholbare Mittel und unklare Runden, nicht der stündliche Wechse
   ]);
 });
 
+test('Offen: Mittel, das nach neuem Plan fehlt, wird nicht mehr angeboten', () => {
+  const z = zustandMit({
+    '2026-11-20T08': { zeit: null, mittel: { alt: 'nein', salbe: 'nein' }, ausgefallen: true }
+  });
+  assert.deepEqual(offenePunkte(z, um(9)).map((o) => o.id), ['salbe']);
+});
+
 test('Übliche Zeit: Median der letzten 5 Tage, erster Eintrag je Tag', () => {
   const ev = [];
   const zeiten = [[15, 17, 20], [16, 17, 50], [17, 17, 35], [18, 17, 30], [19, 17, 40], [20, 17, 35]];

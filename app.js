@@ -8,7 +8,7 @@ import {
   ereignisVerlauf, minutenAlsUhrzeit, notizSetzen, visiten
 } from './logik.js';
 
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.2.1';
 const SPEICHER_KEY = 'tropfen';
 const UEBERFAELLIG_NACH = 15; // Minuten nach der vollen Stunde
 

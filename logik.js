@@ -184,7 +184,9 @@ export function offenePunkte(zustand, jetzt, stunden = 24) {
     const e = zustand.runden[k];
     if (e.unklar) { liste.push({ art: 'unklar', k, runde }); continue; }
     for (const [id, s] of Object.entries(e.mittel)) {
-      if (s === 'nein' && mittelNach(zustand.plan, id).nachholbar !== false) liste.push({ art: 'mittel', k, runde, id });
+      // Mittel, die nicht mehr im Plan stehen (z. B. nach einem neuen Plan), sind nicht mehr offen
+      const m = zustand.plan.mittel.find((x) => x.id === id);
+      if (s === 'nein' && m && m.nachholbar !== false) liste.push({ art: 'mittel', k, runde, id });
     }
   }
   return liste;
