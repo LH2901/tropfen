@@ -1,6 +1,6 @@
 // Service Worker: hält alle Dateien offline bereit.
 // Bei jeder Änderung an einer Datei VERSION erhöhen, sonst kommt das Update nicht an.
-const VERSION = 'tropfen-v1.3.0';
+const VERSION = 'tropfen-v1.3.1';
 const DATEIEN = [
   './',
   './index.html',

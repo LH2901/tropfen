@@ -8,7 +8,7 @@ import {
   ereignisVerlauf, minutenAlsUhrzeit, notizSetzen, visiten, rundenStunden
 } from './logik.js';
 
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.3.1';
 const SPEICHER_KEY = 'tropfen';
 const UEBERFAELLIG_NACH = 15; // Minuten nach der vollen Stunde
 
@@ -235,6 +235,9 @@ function sheetOeffnen(titel, inhalt, aktionen = {}, beiSchliessen = null) {
 }
 
 function sheetSchliessen() {
+  // Tastatur zuerst schließen, damit iOS das Layout danach sauber neu berechnet
+  const fokus = document.activeElement;
+  if (fokus && $('sheet').contains(fokus)) fokus.blur();
   $('sheet').hidden = true;
   $('schleier').hidden = true;
   document.documentElement.classList.remove('gesperrt');
@@ -242,6 +245,23 @@ function sheetSchliessen() {
   sheetAktionen = {};
   sheetBeiSchliessen = null;
   if (nach) nach();
+  layoutAuffrischen();
+}
+
+// iOS lässt fixierte Elemente (die Leiste unten) nach dem Schließen der Tastatur manchmal
+// um die Tastaturhöhe nach oben verschoben stehen, bis man scrollt. Ein Mini-Scroll und
+// ein kurz gesetzter Transform erzwingen das Neuberechnen; sonst ist das unsichtbar.
+function layoutAuffrischen() {
+  for (const ms of [0, 150, 450]) {
+    setTimeout(() => {
+      const y = window.scrollY;
+      window.scrollTo(0, y > 0 ? y - 1 : y + 1);
+      window.scrollTo(0, y);
+      const leiste = $('leiste');
+      leiste.style.transform = 'translateZ(0)';
+      setTimeout(() => { leiste.style.transform = ''; }, 60);
+    }, ms);
+  }
 }
 
 function bestaetigen({ titel, text = '', ja, nein = 'Abbrechen', gefahr = false }, aktion) {
@@ -707,7 +727,17 @@ document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !$('sh
 
 render();
 setInterval(() => { if (!document.hidden) render(); }, 30000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { render(); layoutAuffrischen(); } });
+document.addEventListener('focusout', (ev) => {
+  if (ev.target.matches && ev.target.matches('input, textarea, select')) layoutAuffrischen();
+});
+if (window.visualViewport) {
+  let hoehe = visualViewport.height;
+  visualViewport.addEventListener('resize', () => {
+    if (visualViewport.height > hoehe + 100) layoutAuffrischen(); // Tastatur wurde geschlossen
+    hoehe = visualViewport.height;
+  });
+}
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', themaAnwenden);
 
 // ---------- Offline ----------
