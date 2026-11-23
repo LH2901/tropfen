@@ -29,6 +29,7 @@ export const EREIGNIS_TYPEN = [
      }
    },
    ereignisse: [{ typ, zeit: ISO-String, notiz?: string }],   // notiz bisher nur bei Visite
+   extra: [{ zeit: ISO-String, mittel: [id], anderes?: string, notiz?: string }], // außer der Reihe
    letztesBackup: ISO-String | null
  }
 */
@@ -46,6 +47,7 @@ export function leererZustand() {
     },
     runden: {},
     ereignisse: [],
+    extra: [],
     letztesBackup: null
   };
 }
@@ -63,6 +65,7 @@ export function migrieren(daten) {
     einstellungen: { ...basis.einstellungen, ...(daten.einstellungen || {}) },
     runden: daten.runden && typeof daten.runden === 'object' ? daten.runden : {},
     ereignisse: Array.isArray(daten.ereignisse) ? daten.ereignisse : [],
+    extra: Array.isArray(daten.extra) ? daten.extra : [],
     letztesBackup: daten.letztesBackup || null
   };
 }
@@ -269,6 +272,32 @@ export function visiten(ereignisse, ab = null) {
     .sort((a, b) => (a.zeit < b.zeit ? 1 : -1));
 }
 
+// ---------- Außer der Reihe ----------
+
+/** Neuer Eintrag für Tropfen außerhalb des Plans. Ohne Mittel und ohne „anderes“ gibt es keinen Eintrag. */
+export function extraErfassen(zeit, mittel = [], anderes = '', notiz = '') {
+  const e = { zeit: zeit.toISOString(), mittel: [...new Set(mittel)] };
+  const a = String(anderes ?? '').trim();
+  const n = String(notiz ?? '').trim();
+  if (a) e.anderes = a;
+  if (n) e.notiz = n;
+  return e.mittel.length || e.anderes ? e : null;
+}
+
+/** Einträge außer der Reihe an einem Tag, nach Uhrzeit sortiert. */
+export function extraAm(extra, tag) {
+  const k = tagesSchluessel(tag);
+  return (extra || []).filter((e) => tagesSchluessel(new Date(e.zeit)) === k)
+    .sort((a, b) => (a.zeit < b.zeit ? -1 : 1));
+}
+
+/** „Vigamox, Salbe“ – Kurznamen aus dem Plan plus freier Text. */
+export function extraMittelText(plan, e) {
+  const namen = e.mittel.map((id) => { const m = mittelNach(plan, id); return m.kurz || m.name; });
+  if (e.anderes) namen.push(e.anderes);
+  return namen.join(', ');
+}
+
 // ---------- Formatierung ----------
 
 export const uhrzeit = (d) => `${d.getHours()}:${pad(d.getMinutes())}`;
@@ -325,6 +354,13 @@ export function tagesText(zustand, tag, jetzt) {
   }
   const ev = EREIGNIS_TYPEN.flatMap((t) => ereignisseAm(zustand.ereignisse, t.id, tag).map((e) => `${t.name} ${uhrzeit(new Date(e.zeit))}`));
   if (ev.length) zeilen.push('', ev.join(', '));
+  const extra = extraAm(zustand.extra, tag);
+  if (extra.length) {
+    zeilen.push('', 'Außer der Reihe:');
+    for (const e of extra) {
+      zeilen.push(`${uhrzeit(new Date(e.zeit)).padStart(5)}  ${extraMittelText(zustand.plan, e)}${e.notiz ? ' – ' + e.notiz : ''}`);
+    }
+  }
   for (const e of ereignisseAm(zustand.ereignisse, 'visite', tag)) {
     if (e.notiz) zeilen.push('', `Visite ${uhrzeit(new Date(e.zeit))}:`, e.notiz);
   }

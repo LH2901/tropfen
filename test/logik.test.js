@@ -4,8 +4,31 @@ import {
   leererZustand, migrieren, importLesen, exportErzeugen, schluessel, ausSchluessel, letzteRunde,
   rundeErfassen, rundeAusgefallen, rundeUnklar, rundenStatus, tagesZeitleiste, offenePunkte,
   ueblicheZeit, ueblichText, icsErzeugen, rundenDetail, ereignisVerlauf, notizSetzen, visiten, tagesText,
-  rundenStunden
+  rundenStunden, extraErfassen, extraAm, extraMittelText
 } from '../logik.js';
+
+test('Außer der Reihe: erfassen, Tag, Text; Runden bleiben unberührt; Backup behält Einträge', () => {
+  assert.equal(extraErfassen(um(9, 12), [], '  '), null);
+  const a = extraErfassen(um(9, 12), ['wechsel', 'wechsel'], '', ' ausgelaufen ');
+  assert.deepEqual(a, { zeit: um(9, 12).toISOString(), mittel: ['wechsel'], notiz: 'ausgelaufen' });
+  const b = extraErfassen(um(7, 5), ['salbe'], 'Tränenersatz');
+  const c = extraErfassen(um(23, 50, 19), ['salbe']);
+
+  const z = { ...leererZustand(), plan, extra: [a, b, c] };
+  assert.deepEqual(extraAm(z.extra, um(0)).map((e) => e.zeit), [b.zeit, a.zeit]);
+  assert.equal(extraMittelText(plan, b), 'Salbe, Tränenersatz');
+
+  // Kein Einfluss auf Runden: letzte Runde und Zeitleiste ignorieren Extra-Einträge
+  assert.equal(letzteRunde(z.runden), null);
+  assert.equal(tagesZeitleiste(z, um(0), um(10)).filter((x) => x.eintrag).length, 0);
+
+  const text = tagesText(z, um(0), um(23));
+  assert.match(text, /Außer der Reihe:\n 7:05  Salbe, Tränenersatz\n 9:12  Wechsel – ausgelaufen/);
+  assert.doesNotMatch(text, /23:50/);
+
+  assert.equal(migrieren(JSON.parse(exportErzeugen(z))).extra.length, 3);
+  assert.deepEqual(migrieren({ version: 1 }).extra, []);
+});
 
 test('Plan alle 2 Stunden: Runden-Stunden, Zeitleiste mit altem Eintrag, Kalender', () => {
   const zweiStd = { mittel: [

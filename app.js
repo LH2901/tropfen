@@ -5,10 +5,11 @@ import {
   faelligeMittel, mittelNach, rundeErfassen, rundeAusgefallen, rundeUnklar, rundenStatus,
   tagesZeitleiste, offenePunkte, ueblicheZeit, ereignisseAm, EREIGNIS_TYPEN, uhrzeit, rundenName,
   dauer, ueblichText, statusText, rundenDetail, tagesText, icsErzeugen, tagesSchluessel,
-  ereignisVerlauf, minutenAlsUhrzeit, notizSetzen, visiten, rundenStunden
+  ereignisVerlauf, minutenAlsUhrzeit, notizSetzen, visiten, rundenStunden,
+  extraErfassen, extraAm, extraMittelText
 } from './logik.js';
 
-const APP_VERSION = '1.3.1';
+const APP_VERSION = '1.4.0';
 const SPEICHER_KEY = 'tropfen';
 const UEBERFAELLIG_NACH = 15; // Minuten nach der vollen Stunde
 
@@ -77,6 +78,7 @@ function glyph(status) {
     case 'ueberfaellig': inhalt = `<path class="umriss" d="${TROPFEN}"/><text class="zeichen" x="12" y="19.2" text-anchor="middle">!</text>`; break;
     case 'unklar': inhalt = `<path class="umriss" d="${TROPFEN}"/><text class="zeichen" x="12" y="19.2" text-anchor="middle">?</text>`; break;
     case 'faellig': inhalt = `<path class="umriss" d="${TROPFEN}"/>`; break;
+    case 'extra': inhalt = `<path class="umriss" d="${TROPFEN}"/><line class="strich duenn" x1="12" y1="11.5" x2="12" y2="18.5"/><line class="strich duenn" x1="8.5" y1="15" x2="15.5" y2="15"/>`; break;
     case 'keine': klasse = 'leise'; inhalt = `<line class="strich" x1="7" y1="12" x2="17" y2="12"/>`; break;
     default: klasse = 'punkt leise'; inhalt = `<circle class="umriss" cx="12" cy="12" r="8"/>`;
   }
@@ -203,17 +205,27 @@ function renderZeitleiste(jetzt) {
     : tag.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'long' });
   document.querySelector('[data-aktion="tag"][data-wert="1"]').disabled = tagVersatz >= 0;
   const aktuell = schluessel(jetzt);
-  $('zeitleiste').innerHTML = tagesZeitleiste(z, tag, jetzt, UEBERFAELLIG_NACH).map((zeile) => {
+  const runden = tagesZeitleiste(z, tag, jetzt, UEBERFAELLIG_NACH).map((zeile) => {
     const k = schluessel(zeile.runde);
     const e = zeile.eintrag;
     const zeit = e && e.zeit ? uhrzeit(new Date(e.zeit)) : '';
     const status = statusText(zeile.status) + (zeit ? ` · ${zeit}` : '');
     const detail = rundenDetail(z.plan, zeile);
-    return `<li><button class="zeile ${zeile.status}${k === aktuell ? ' jetzt' : ''}" data-aktion="runde" data-k="${k}">
+    return { t: zeile.runde.getTime(), html: `<li><button class="zeile ${zeile.status}${k === aktuell ? ' jetzt' : ''}" data-aktion="runde" data-k="${k}">
       <span class="zeile-stunde">${zeile.runde.getHours()}</span>${glyph(zeile.status)}
       <span class="zeile-text"><span class="zeile-status">${status}</span>${detail ? `<span class="zeile-detail">${esc(detail)}</span>` : ''}</span>
-    </button></li>`;
-  }).join('');
+    </button></li>` };
+  });
+  // Tropfen außer der Reihe stehen zeitlich zwischen den Runden
+  const extra = extraAm(z.extra, tag).map((e) => {
+    const d = new Date(e.zeit);
+    const detail = extraMittelText(z.plan, e) + (e.notiz ? ` · ${e.notiz}` : '');
+    return { t: d.getTime(), html: `<li><button class="zeile extra" data-aktion="extra" data-zeit="${e.zeit}">
+      <span class="zeile-stunde">${uhrzeit(d)}</span>${glyph('extra')}
+      <span class="zeile-text"><span class="zeile-status">außer der Reihe</span><span class="zeile-detail">${esc(detail)}</span></span>
+    </button></li>` };
+  });
+  $('zeitleiste').innerHTML = [...runden, ...extra].sort((a, b) => a.t - b.t).map((x) => x.html).join('');
 }
 
 // ---------- Sheets ----------
@@ -377,6 +389,58 @@ function offenMarkieren(el, wert) {
   speichern();
   render();
   toast(`${kurzName(id)} (${rundenName(ausSchluessel(k))}) ${wert === 'nachgeholt' ? `nachgeholt · ${uhrzeit(new Date())}` : 'entfällt'}`);
+}
+
+// ---------- Außer der Reihe ----------
+
+/** Uhrzeit aus dem Feld am Tag `bezug`; liegt sie bei einem neuen Eintrag in der Zukunft, war es gestern. */
+function extraZeit(bezug, wert, neu) {
+  if (!wert) return null;
+  const [h, m] = wert.split(':').map(Number);
+  const d = new Date(bezug.getFullYear(), bezug.getMonth(), bezug.getDate(), h, m);
+  if (neu && d - new Date() > 5 * 60000) d.setDate(d.getDate() - 1);
+  return d;
+}
+
+function extraSheet(zeitAlt) {
+  const alt = zeitAlt ? z.extra.find((e) => e.zeit === zeitAlt) : null;
+  if (zeitAlt && !alt) return;
+  const gewaehlt = new Set(alt ? alt.mittel : []);
+  const bezug = alt ? new Date(alt.zeit) : new Date();
+  sheetOeffnen(alt ? 'Außer der Reihe' : 'Extra getropft', `
+    <p class="leise">Für Tropfen außerhalb des Plans, z. B. wenn einer gleich wieder ausgelaufen ist. Zählt nicht als Runde.</p>
+    ${schalterListe(z.plan.mittel.map((m) => ({ id: m.id, name: m.name, art: m.art, an: gewaehlt.has(m.id) }))).replace("schalter-liste", "schalter-liste auswahl")}
+    <div class="feld"><label for="x-anderes">Anderes Mittel</label>
+      <input id="x-anderes" type="text" autocapitalize="sentences" placeholder="optional" value="${esc(alt && alt.anderes || '')}"></div>
+    <div class="feld"><label for="x-zeit">Uhrzeit</label><input id="x-zeit" type="time" value="${feldZeit(bezug.toISOString())}"></div>
+    <div class="visite-notiz-feld"><label for="x-notiz">Grund (optional)</label>
+      <textarea id="x-notiz" rows="2" autocapitalize="sentences" placeholder="z. B. sofort ausgelaufen">${esc(alt && alt.notiz || '')}</textarea></div>
+    <p class="leise" id="x-hinweis" hidden>Bitte mindestens ein Mittel wählen oder eintragen.</p>
+    <div class="knoepfe"><button class="knopf primaer" data-aktion="speichern">${alt ? 'Speichern' : 'Eintragen'}</button></div>
+    ${alt ? '<div class="knoepfe abstand-gross"><button class="knopf gefahr" data-aktion="loeschen">Eintrag löschen</button></div>' : ''}`, {
+    schalter: (el) => { if (schalterUmlegen(el)) gewaehlt.add(el.dataset.id); else gewaehlt.delete(el.dataset.id); },
+    speichern: () => {
+      const zeit = extraZeit(bezug, $('x-zeit').value, !alt) || bezug;
+      const plan = new Set(z.plan.mittel.map((m) => m.id));
+      // Mittel aus einem früheren Plan bleiben beim Bearbeiten erhalten
+      const reihenfolge = z.plan.mittel.map((m) => m.id);
+      const ids = [...gewaehlt].filter((id) => plan.has(id) || (alt && alt.mittel.includes(id)))
+        .sort((a, b) => (reihenfolge.indexOf(a) + 1 || 99) - (reihenfolge.indexOf(b) + 1 || 99));
+      const e = extraErfassen(zeit, ids, $('x-anderes').value, $('x-notiz').value);
+      if (!e) { $('x-hinweis').hidden = false; return; }
+      merken();
+      if (alt) z.extra = z.extra.filter((x) => x !== alt);
+      z.extra.push(e);
+      speichern(); sheetSchliessen(); render();
+      toast(`${extraMittelText(z.plan, e)} außer der Reihe · ${uhrzeit(zeit)}`);
+    },
+    loeschen: () => {
+      merken();
+      z.extra = z.extra.filter((x) => x !== alt);
+      speichern(); sheetSchliessen(); render();
+      toast('Eintrag gelöscht');
+    }
+  });
 }
 
 // ---------- Runde korrigieren ----------
@@ -703,6 +767,8 @@ $('datei').addEventListener('change', async (ev) => {
 const aktionen = {
   alles: () => erfassenStart([]),
   'nicht-alles': nichtAllesSheet,
+  'extra-neu': () => extraSheet(null),
+  extra: (el) => extraSheet(el.dataset.zeit),
   rueckgaengig,
   einstellungen: einstellungenSheet,
   luecken: lueckenSheet,

@@ -242,6 +242,9 @@ main {
 .zeile.kommt .zeile-status, .zeile.keine .zeile-status { color: var(--text-2); font-weight: 400; }
 .zeile.ueberfaellig .zeile-status, .zeile.unklar .zeile-status { color: var(--akzent-tinte); font-weight: 600; }
 .zeile.jetzt { box-shadow: inset 3px 0 0 var(--akzent); }
+.zeile.extra .zeile-stunde { font-size: 1rem; font-weight: 500; color: var(--text-2); }
+.zeile.extra .zeile-status { font-weight: 500; }
+.glyph .strich.duenn { stroke-width: 1.8; }
 
 /* Tropfenglyphe: Form trägt den Status, nicht die Farbe */
 .glyph { position: relative; width: 28px; height: 28px; display: grid; place-items: center; color: var(--text); }
@@ -280,6 +283,7 @@ main {
   text-underline-offset: 5px;
 }
 .knopf-nebel:active { background: var(--flaeche); }
+.leiste-neben { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 
 .haupt {
   min-height: 80px;
@@ -391,6 +395,8 @@ html.gesperrt .toast { bottom: auto; top: calc(env(safe-area-inset-top) + 12px);
 .schalter[aria-checked="true"] .kasten { background: var(--akzent); border-color: var(--akzent); }
 .schalter[aria-checked="true"] .kasten svg { visibility: visible; }
 .schalter[aria-checked="false"] .schalter-name { text-decoration: line-through; text-decoration-thickness: 2px; color: var(--text-2); }
+/* Auswahl (Extra getropft): nicht gewählt heißt nur „nicht dabei“, nicht „fehlt“ */
+.schalter-liste.auswahl .schalter[aria-checked="false"] .schalter-name { text-decoration: none; color: var(--text); }
 .schalter .ico { color: var(--text-2); }
 .schalter-zusatz { margin-left: auto; color: var(--text-2); font-size: 1rem; }
 
