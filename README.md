@@ -1,6 +1,6 @@
 # Tropfen
 
-Kleine Web-App für das iPhone zum Abhaken von Augentropfen nach festem Plan (stündlich, alle 2 Stunden oder beliebige Stunden), mit Offen-Liste, Tageszeitleiste sowie Essen und Visite (mit Notizen zur Visite).
+Kleine Web-App für das iPhone zum Abhaken von Augentropfen, entweder nach festem Plan (stündlich, alle 2 Stunden oder beliebige Stunden) oder nur nach Anzahl pro Tag, mit Offen-Liste, Tageszeitleiste sowie Essen und Visite (mit Notizen zur Visite).
 Läuft offline. Alle Daten bleiben auf dem Gerät.
 
 Persönliche Gedächtnisstütze, kein Medizinprodukt. Es gelten immer die Anweisungen von Station und Ärzten.
@@ -49,8 +49,16 @@ Der Plan wird als JSON-Datei importiert und steht nicht im Code:
 ```
 
 - `art`: `tropfen` oder `salbe`
-- `stunden`: volle Stunden, zu denen das Mittel fällig ist
+- `stunden`: volle Stunden, zu denen das Mittel fällig ist (Modus „Feste Uhrzeiten“)
+- `proTag` (optional): wie oft am Tag (Modus „Nach Anzahl“); ohne Angabe die Anzahl der `stunden`
 - `nachholbar`: Fehlt das Mittel in einer Runde, erscheint es unter „Offen“
+
+## Feste Uhrzeiten oder nach Anzahl
+
+Einstellungen → **Tropfen** schaltet um:
+
+- **Feste Uhrzeiten**: Runden zu den Stunden laut Plan; ein Tipp trägt die ganze Runde ein.
+- **Nach Anzahl**: keine festen Runden. Du trägst ein, wann du was getropft hast. Die App zeigt je Mittel, wie oft es heute schon war, und schlägt die nächste Gabe gleichmäßig verteilt vor (Abstand höchstens 24 h geteilt durch die Anzahl, aber so, dass der Rest bis zur eingestellten letzten Gabe passt; mindestens 1 Stunde). Was fällig ist, trägt der große Knopf mit einem Tipp ein; „Auswahl …“ für eine andere Auswahl oder Uhrzeit.
 
 ## Entwicklung
 

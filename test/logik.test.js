@@ -4,7 +4,8 @@ import {
   leererZustand, migrieren, importLesen, exportErzeugen, schluessel, ausSchluessel, letzteRunde,
   rundeErfassen, rundeAusgefallen, rundeUnklar, rundenStatus, tagesZeitleiste, offenePunkte,
   ueblicheZeit, ueblichText, icsErzeugen, rundenDetail, ereignisVerlauf, notizSetzen, visiten, tagesText,
-  rundenStunden, extraErfassen, extraAm, extraMittelText
+  rundenStunden, extraErfassen, extraAm, extraMittelText,
+  proTag, gabeErfassen, gabenAm, anzahlStand, gabeVorschlag, mittelText, gueltigerPlan
 } from '../logik.js';
 
 test('Außer der Reihe: erfassen, Tag, Text; Runden bleiben unberührt; Backup behält Einträge', () => {
@@ -194,4 +195,75 @@ test('ICS: 10–19 Uhr ergibt 10 tägliche Ereignisse mit Alarm', () => {
   assert.ok(ics.includes('DTSTART:20261120T100000'));
   assert.ok(ics.includes('DTEND:20261120T190500'));
   assert.ok(ics.includes('\r\n'));
+});
+
+test('Nach Anzahl: Stand, gleichmäßige Verteilung, Vorschlag, Text, Backup', () => {
+  const p = {
+    mittel: [
+      { id: 'vig', name: 'Vigamox', kurz: 'Vigamox', art: 'tropfen', stunden: [], proTag: 6 },
+      { id: 'poly', name: 'Polyspectran', kurz: 'Poly', art: 'tropfen', stunden: [], proTag: 6 },
+      { id: 'salbe', name: 'Salbe', kurz: 'Salbe', art: 'salbe', stunden: [], proTag: 5 },
+      { id: 'dexa', name: 'Dexa', kurz: 'Dexa', art: 'tropfen', stunden: [], proTag: 2 },
+      { id: 'alt', name: 'Alt', kurz: 'Alt', art: 'tropfen', stunden: [8, 20] }
+    ]
+  };
+  assert.ok(gueltigerPlan(p));
+  assert.ok(!gueltigerPlan({ mittel: [{ ...p.mittel[0], proTag: 2.5 }] }));
+  assert.equal(proTag(p.mittel[4]), 2);
+  assert.equal(gabeErfassen(um(8), []), null);
+
+  const z = { ...leererZustand(), plan: p };
+  z.einstellungen.modus = 'anzahl';
+
+  // Noch nichts: alles ab Tagesbeginn (8 Uhr) fällig, vorher die nächste Gruppe als früh
+  let stand = anzahlStand(z, um(9));
+  assert.deepEqual(stand.map((s) => s.status), ['faellig', 'faellig', 'faellig', 'faellig', 'faellig']);
+  assert.equal(gabeVorschlag(anzahlStand(z, um(7))).frueh, true);
+  assert.equal(gabeVorschlag(anzahlStand(z, um(7))).ids.length, 5);
+
+  // 8:00 alles: Abstand min(24 h / n, Rest bis 22 Uhr / offene Gaben)
+  z.gaben.push(gabeErfassen(um(8), ['vig', 'poly', 'salbe', 'dexa', 'alt']));
+  stand = anzahlStand(z, um(10, 15));
+  const n = Object.fromEntries(stand.map((s) => [s.m.id, s]));
+  assert.equal(n.vig.ist, 1);
+  assert.deepEqual(n.vig.naechste, um(10, 50));   // 14 h / 5 = 2 h 48 → auf 5 min gerundet
+  assert.deepEqual(n.salbe.naechste, um(11, 30));  // 14 h / 4 = 3 h 30
+  assert.deepEqual(n.dexa.naechste, um(20));       // 24 h / 2 = 12 h
+  assert.equal(n.vig.status, 'spaeter');
+  let v = gabeVorschlag(stand);
+  assert.deepEqual(v, { ids: ['vig', 'poly'], frueh: true, um: um(10, 50) });
+
+  // 30 Minuten vorher fällig; Salbe kommt dazu, sobald sie dran ist
+  v = gabeVorschlag(anzahlStand(z, um(10, 25)));
+  assert.deepEqual(v.ids, ['vig', 'poly']);
+  assert.equal(v.frueh, false);
+  z.gaben.push(gabeErfassen(um(10, 45), ['vig', 'poly']));
+  assert.deepEqual(gabeVorschlag(anzahlStand(z, um(11, 10))).ids, ['salbe']);
+
+  // Fertig, wenn die Anzahl erreicht ist; Gaben in der Zukunft zählen noch nicht
+  z.gaben.push(gabeErfassen(um(20), ['dexa']));
+  assert.equal(anzahlStand(z, um(19)).find((s) => s.m.id === 'dexa').ist, 1);
+  assert.equal(anzahlStand(z, um(21)).find((s) => s.m.id === 'dexa').status, 'fertig');
+
+  // Spät dran: Rest wird enger verteilt, aber nie unter 1 Stunde; direkt danach nicht gleich wieder fällig
+  const spaet = { ...leererZustand(), plan: p, gaben: [gabeErfassen(um(21, 50), ['vig'])] };
+  const s1 = anzahlStand(spaet, um(21, 51)).find((s) => s.m.id === 'vig');
+  assert.deepEqual(s1.naechste, um(22, 50));
+  assert.equal(s1.status, 'spaeter');
+  assert.equal(anzahlStand(spaet, um(22, 35)).find((s) => s.m.id === 'vig').status, 'faellig');
+
+  // Gaben anderer Tage zählen nicht
+  z.gaben.push(gabeErfassen(um(9, 0, 19), ['vig']));
+  assert.equal(gabenAm(z.gaben, um(0)).length, 3);
+  assert.equal(mittelText(p, ['vig', 'salbe']), 'Vigamox, Salbe');
+
+  const text = tagesText(z, um(0), um(23));
+  assert.match(text, / 8:00  Vigamox, Poly, Salbe, Dexa, Alt\n10:45  Vigamox, Poly\n20:00  Dexa/);
+  assert.match(text, /Gezählt: Vigamox 2\/6, Poly 2\/6, Salbe 1\/5, Dexa 2\/2, Alt 1\/2/);
+
+  // Runden-Modus bleibt unberührt
+  assert.equal(letzteRunde(z.runden), null);
+  assert.equal(migrieren(JSON.parse(exportErzeugen(z))).gaben.length, 4);
+  assert.deepEqual(migrieren({ version: 1 }).gaben, []);
+  assert.equal(migrieren({ version: 1 }).einstellungen.modus, 'zeiten');
 });

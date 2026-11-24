@@ -142,6 +142,29 @@ main {
 .mittel-liste li { display: flex; align-items: center; gap: 12px; font-size: 1.1875rem; }
 .mittel-liste .ico { color: var(--text-2); }
 
+/* Modus „Nach Anzahl“: Stand je Mittel */
+.stand-liste { list-style: none; margin: 12px 0 0; padding: 0; }
+.stand {
+  display: grid; grid-template-columns: 24px 1fr auto; align-items: center; column-gap: 12px;
+  padding: 10px 0; border-top: 1px solid var(--linie);
+}
+.stand:first-child { border-top: 0; }
+.stand .ico { color: var(--text-2); }
+.stand-text { display: grid; gap: 3px; min-width: 0; }
+.stand-name { font-size: 1.1875rem; font-weight: 500; }
+.stand-info { color: var(--text-2); font-size: 0.9375rem; line-height: 1.3; }
+.stand.faellig .stand-info { color: var(--akzent-tinte); font-weight: 600; }
+.stand.fertig .stand-name { color: var(--text-2); }
+.stand-punkte { display: flex; gap: 5px; }
+.stand-punkte i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--text-2); }
+.stand-punkte i.voll { background: var(--text); border-color: var(--text); }
+.stand-zahl {
+  font-family: ui-rounded, -apple-system, system-ui, sans-serif;
+  font-size: 1.75rem; font-weight: 600; line-height: 1;
+}
+.stand-zahl small { font-size: 0.6em; font-weight: 500; color: var(--text-2); }
+.stand.fertig .stand-zahl { color: var(--text-2); }
+
 .hinweis-beispiel {
   margin: 12px 0 0;
   padding: 12px 16px;
@@ -242,7 +265,10 @@ main {
 .zeile.kommt .zeile-status, .zeile.keine .zeile-status { color: var(--text-2); font-weight: 400; }
 .zeile.ueberfaellig .zeile-status, .zeile.unklar .zeile-status { color: var(--akzent-tinte); font-weight: 600; }
 .zeile.jetzt { box-shadow: inset 3px 0 0 var(--akzent); }
-.zeile.extra .zeile-stunde { font-size: 1rem; font-weight: 500; color: var(--text-2); }
+.zeile.extra .zeile-stunde, .zeile.uhr .zeile-stunde { font-size: 1rem; font-weight: 500; color: var(--text-2); }
+.zeile.erledigt.uhr .zeile-stunde { color: var(--text); }
+.zeile.faellig .zeile-status { color: var(--akzent-tinte); font-weight: 600; }
+.leer-zeile { padding: 16px 4px; color: var(--text-2); }
 .zeile.extra .zeile-status { font-weight: 500; }
 .glyph .strich.duenn { stroke-width: 1.8; }
 
@@ -443,6 +469,7 @@ html.gesperrt .toast { bottom: auto; top: calc(env(safe-area-inset-top) + 12px);
 .vn-text.leer { color: var(--text-2); }
 
 .segment { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 14px; background: var(--grund); }
+.segment.zwei { grid-template-columns: 1fr 1fr; }
 .segment button { min-height: 48px; border: 0; border-radius: 10px; background: transparent; font-weight: 500; }
 .segment button[aria-pressed="true"] { background: var(--flaeche-2); font-weight: 700; box-shadow: inset 0 0 0 1.5px var(--linie-stark); }
 

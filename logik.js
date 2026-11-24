@@ -17,8 +17,12 @@ export const EREIGNIS_TYPEN = [
  Datenmodell (version 1)
  {
    version: 1,
-   plan: { beispiel?: true, mittel: [{ id, name, kurz, art, stunden: number[], nachholbar }] },
-   einstellungen: { frueh, spaet, dunkel: 'immer'|'auto'|'nie', erinnerungVon, erinnerungBis },
+   plan: { beispiel?: true, mittel: [{ id, name, kurz, art, stunden: number[], proTag?: number, nachholbar }] },
+   einstellungen: {
+     frueh, spaet, dunkel: 'immer'|'auto'|'nie', erinnerungVon, erinnerungBis,
+     modus: 'zeiten'|'anzahl',            // feste Runden oder nur Anzahl pro Tag
+     tagVon, tagBis                       // Zeitraum, über den sich die Gaben verteilen (Modus „anzahl“)
+   },
    runden: {
      'JJJJ-MM-TTTHH': {
        zeit: ISO-String | null,          // echte Uhrzeit der Eingabe, null = unbekannt
@@ -30,6 +34,7 @@ export const EREIGNIS_TYPEN = [
    },
    ereignisse: [{ typ, zeit: ISO-String, notiz?: string }],   // notiz bisher nur bei Visite
    extra: [{ zeit: ISO-String, mittel: [id], anderes?: string, notiz?: string }], // außer der Reihe
+   gaben: [{ zeit: ISO-String, mittel: [id], notiz?: string }],  // Modus „anzahl“: was wann getropft wurde
    letztesBackup: ISO-String | null
  }
 */
@@ -43,11 +48,15 @@ export function leererZustand() {
       spaet: STANDARD_TOLERANZEN.spaet,
       dunkel: 'immer',
       erinnerungVon: 10,
-      erinnerungBis: 19
+      erinnerungBis: 19,
+      modus: 'zeiten',
+      tagVon: 8,
+      tagBis: 22
     },
     runden: {},
     ereignisse: [],
     extra: [],
+    gaben: [],
     letztesBackup: null
   };
 }
@@ -66,6 +75,7 @@ export function migrieren(daten) {
     runden: daten.runden && typeof daten.runden === 'object' ? daten.runden : {},
     ereignisse: Array.isArray(daten.ereignisse) ? daten.ereignisse : [],
     extra: Array.isArray(daten.extra) ? daten.extra : [],
+    gaben: Array.isArray(daten.gaben) ? daten.gaben : [],
     letztesBackup: daten.letztesBackup || null
   };
 }
@@ -75,6 +85,7 @@ export function gueltigerPlan(plan) {
     plan.mittel.every((m) =>
       typeof m.id === 'string' && m.id && typeof m.name === 'string' &&
       (m.art === 'tropfen' || m.art === 'salbe') &&
+      (m.proTag === undefined || (Number.isInteger(m.proTag) && m.proTag >= 0 && m.proTag <= 24)) &&
       Array.isArray(m.stunden) && m.stunden.every((h) => Number.isInteger(h) && h >= 0 && h <= 23));
 }
 
@@ -298,6 +309,82 @@ export function extraMittelText(plan, e) {
   return namen.join(', ');
 }
 
+// ---------- Nach Anzahl (ohne feste Uhrzeiten) ----------
+
+/** Wie oft am Tag; ohne Angabe so oft, wie das Mittel Stunden im Plan hat. */
+export function proTag(m) {
+  return Number.isInteger(m.proTag) ? m.proTag : (m.stunden || []).length;
+}
+
+/** Neue Gabe; ohne Mittel gibt es keinen Eintrag. */
+export function gabeErfassen(zeit, mittel = [], notiz = '') {
+  const g = { zeit: zeit.toISOString(), mittel: [...new Set(mittel)] };
+  const n = String(notiz ?? '').trim();
+  if (n) g.notiz = n;
+  return g.mittel.length ? g : null;
+}
+
+export function gabenAm(gaben, tag) {
+  const k = tagesSchluessel(tag);
+  return (gaben || []).filter((g) => tagesSchluessel(new Date(g.zeit)) === k)
+    .sort((a, b) => (a.zeit < b.zeit ? -1 : 1));
+}
+
+const FUENF_MIN = 5 * MINUTE;
+const aufFuenf = (ms) => Math.round(ms / FUENF_MIN) * FUENF_MIN;
+
+/**
+ * Stand des Tages je Mittel mit `proTag` > 0.
+ * Die nächste Gabe ist gleichmäßig verteilt: Abstand höchstens 24 h / Anzahl, aber so kurz,
+ * dass die restlichen Gaben bis `tagBis` passen (mindestens 1 Stunde).
+ * Status: 'fertig' | 'faellig' (ab `vorlauf` Minuten, höchstens einem Drittel des Abstands, vor der
+ * nächsten Gabe) | 'spaeter'
+ */
+export function anzahlStand(zustand, jetzt, vorlauf = 30) {
+  const e = zustand.einstellungen;
+  const tag0 = new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate());
+  const beginn = new Date(tag0.getTime() + Number(e.tagVon ?? 8) * STUNDE);
+  const ende = new Date(tag0.getTime() + Number(e.tagBis ?? 22) * STUNDE);
+  const heute = gabenAm(zustand.gaben, jetzt).filter((g) => new Date(g.zeit) <= jetzt);
+  return zustand.plan.mittel.filter((m) => proTag(m) > 0).map((m) => {
+    const soll = proTag(m);
+    const eigene = heute.filter((g) => g.mittel.includes(m.id));
+    const ist = eigene.length;
+    const zuletzt = ist ? new Date(eigene[ist - 1].zeit) : null;
+    let naechste = null;
+    let frueh = vorlauf * MINUTE;
+    if (ist < soll) {
+      if (!zuletzt) naechste = beginn;
+      else {
+        const rest = soll - ist;
+        const abstand = Math.max(STUNDE, Math.min(24 * STUNDE / soll, (ende - zuletzt) / rest));
+        naechste = new Date(aufFuenf(zuletzt.getTime() + abstand));
+        frueh = Math.min(frueh, abstand / 3);
+      }
+    }
+    const status = !naechste ? 'fertig' : jetzt >= naechste - frueh ? 'faellig' : 'spaeter';
+    return { m, soll, ist, zuletzt, naechste, status };
+  });
+}
+
+/**
+ * Vorschlag für jetzt: alle fälligen Mittel. Ist nichts fällig, die nächste Gruppe
+ * (alles, was bis 30 Minuten nach der frühesten nächsten Gabe dran ist), mit `frueh: true`.
+ */
+export function gabeVorschlag(stand) {
+  const faellig = stand.filter((s) => s.status === 'faellig');
+  if (faellig.length) return { ids: faellig.map((s) => s.m.id), frueh: false, um: null };
+  const spaeter = stand.filter((s) => s.status === 'spaeter').sort((a, b) => a.naechste - b.naechste);
+  if (!spaeter.length) return { ids: [], frueh: false, um: null };
+  const um = spaeter[0].naechste;
+  return { ids: spaeter.filter((s) => s.naechste - um <= 30 * MINUTE).map((s) => s.m.id), frueh: true, um };
+}
+
+/** „Vigamox, Salbe“ in Plan-Reihenfolge. */
+export function mittelText(plan, ids) {
+  return ids.map((id) => { const m = mittelNach(plan, id); return m.kurz || m.name; }).join(', ');
+}
+
 // ---------- Formatierung ----------
 
 export const uhrzeit = (d) => `${d.getHours()}:${pad(d.getMinutes())}`;
@@ -346,7 +433,17 @@ export function rundenDetail(plan, zeile) {
 export function tagesText(zustand, tag, jetzt) {
   const datum = tag.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const zeilen = [`Augentropfen ${datum}`, ''];
-  for (const z of tagesZeitleiste(zustand, tag, jetzt)) {
+  if (zustand.einstellungen.modus === 'anzahl') {
+    const gaben = gabenAm(zustand.gaben, tag);
+    for (const g of gaben) {
+      zeilen.push(`${uhrzeit(new Date(g.zeit)).padStart(5)}  ${mittelText(zustand.plan, g.mittel)}${g.notiz ? ' – ' + g.notiz : ''}`);
+    }
+    if (!gaben.length) zeilen.push('Keine Gaben eingetragen.');
+    const ende = new Date(tag.getFullYear(), tag.getMonth(), tag.getDate(), 23, 59, 59);
+    const stand = anzahlStand(zustand, jetzt < ende ? jetzt : ende);
+    zeilen.push('', `Gezählt: ${stand.map((s) => `${s.m.kurz || s.m.name} ${s.ist}/${s.soll}`).join(', ')}`);
+  }
+  for (const z of zustand.einstellungen.modus === 'anzahl' ? [] : tagesZeitleiste(zustand, tag, jetzt)) {
     if (z.status === 'kommt' || z.status === 'keine') continue;
     const zeit = z.eintrag && z.eintrag.zeit ? uhrzeit(new Date(z.eintrag.zeit)) : '–';
     const detail = z.eintrag ? rundenDetail(zustand.plan, z) : '';

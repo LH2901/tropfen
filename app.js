@@ -6,10 +6,11 @@ import {
   tagesZeitleiste, offenePunkte, ueblicheZeit, ereignisseAm, EREIGNIS_TYPEN, uhrzeit, rundenName,
   dauer, ueblichText, statusText, rundenDetail, tagesText, icsErzeugen, tagesSchluessel,
   ereignisVerlauf, minutenAlsUhrzeit, notizSetzen, visiten, rundenStunden,
-  extraErfassen, extraAm, extraMittelText
+  extraErfassen, extraAm, extraMittelText,
+  proTag, gabeErfassen, gabenAm, anzahlStand, gabeVorschlag, mittelText
 } from './logik.js';
 
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.5.0';
 const SPEICHER_KEY = 'tropfen';
 const UEBERFAELLIG_NACH = 15; // Minuten nach der vollen Stunde
 
@@ -63,6 +64,7 @@ function rueckgaengig() {
 
 const toleranzen = () => ({ frueh: Number(z.einstellungen.frueh), spaet: Number(z.einstellungen.spaet) });
 const kurzName = (id) => { const m = mittelNach(z.plan, id); return m.kurz || m.name; };
+const anzahlModus = () => z.einstellungen.modus === 'anzahl';
 
 // ---------- Bausteine ----------
 
@@ -112,8 +114,14 @@ function render() {
   const jetzt = new Date();
   themaAnwenden();
   $('datum').textContent = jetzt.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
-  renderNaechste(jetzt);
-  renderOffen(jetzt);
+  if (anzahlModus()) {
+    renderStand(jetzt);
+    $('offen').hidden = true;
+  } else {
+    renderNaechste(jetzt);
+    renderOffen(jetzt);
+  }
+  document.querySelector('.leiste [data-aktion="nicht-alles"]').textContent = anzahlModus() ? 'Auswahl …' : 'Nicht alles …';
   renderEreignisse(jetzt);
   renderZeitleiste(jetzt);
   $('beispiel').hidden = !z.plan.beispiel;
@@ -156,8 +164,41 @@ function renderNaechste(jetzt) {
     ${notiz ? `<p class="notiz">${notiz}</p>` : ''}`;
 
   $('haupt-runde').textContent = rundenName(r.runde);
+  $('haupt').querySelector('.haupt-label').textContent = 'Alles bekommen';
   $('haupt').classList.toggle('ruhig', r.art === 'frueh');
   $('haupt').setAttribute('aria-label', `${rundenName(r.runde)}: alles bekommen`);
+}
+
+// Modus „Nach Anzahl“: je Mittel, wie oft heute schon, und wann ungefähr als Nächstes
+function standInfo(s, jetzt) {
+  const zuletzt = s.zuletzt ? `zuletzt ${uhrzeit(s.zuletzt)}` : '';
+  let wann;
+  if (s.status === 'fertig') wann = 'für heute fertig';
+  else if (s.status === 'spaeter') wann = s.zuletzt ? `nächste ~${uhrzeit(s.naechste)}` : `ab ~${uhrzeit(s.naechste)}`;
+  else {
+    const seit = Math.floor((jetzt - s.naechste) / 60000);
+    wann = seit < 0 ? `fällig ~${uhrzeit(s.naechste)}` : seit < 5 ? 'jetzt fällig' : `fällig seit ${dauer(seit)}`;
+  }
+  return [zuletzt, wann].filter(Boolean).join(' · ');
+}
+
+function renderStand(jetzt) {
+  const stand = anzahlStand(z, jetzt);
+  const v = gabeVorschlag(stand);
+  $('naechste').innerHTML = `
+    <p class="naechste-label">Heute</p>
+    ${stand.length ? `<ul class="stand-liste">${stand.map((s) => `<li class="stand ${s.status}">
+      ${artIcon(s.m.art)}
+      <span class="stand-text"><span class="stand-name">${esc(s.m.name)}</span>
+        <span class="stand-punkte" aria-hidden="true">${Array.from({ length: s.soll }, (_, i) => `<i${i < s.ist ? ' class="voll"' : ''}></i>`).join('')}</span>
+        <span class="stand-info">${standInfo(s, jetzt)}</span></span>
+      <span class="stand-zahl" aria-label="${s.ist} von ${s.soll}">${s.ist}<small>/${s.soll}</small></span>
+    </li>`).join('')}</ul>` : '<p class="notiz">Im Plan steht bei keinem Mittel, wie oft am Tag.</p>'}`;
+  const text = v.ids.length ? mittelText(z.plan, v.ids) + (v.frueh ? ` · erst ~${uhrzeit(v.um)}` : '') : 'Für heute alles erledigt';
+  $('haupt-runde').textContent = text;
+  $('haupt').querySelector('.haupt-label').textContent = v.ids.length ? 'Jetzt getropft' : 'Trotzdem tropfen …';
+  $('haupt').classList.toggle('ruhig', !v.ids.length || v.frueh);
+  $('haupt').setAttribute('aria-label', v.ids.length ? `Jetzt getropft: ${text}` : 'Tropfen eintragen');
 }
 
 function renderOffen(jetzt) {
@@ -205,7 +246,7 @@ function renderZeitleiste(jetzt) {
     : tag.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'long' });
   document.querySelector('[data-aktion="tag"][data-wert="1"]').disabled = tagVersatz >= 0;
   const aktuell = schluessel(jetzt);
-  const runden = tagesZeitleiste(z, tag, jetzt, UEBERFAELLIG_NACH).map((zeile) => {
+  const runden = anzahlModus() ? gabenZeilen(tag, jetzt) : tagesZeitleiste(z, tag, jetzt, UEBERFAELLIG_NACH).map((zeile) => {
     const k = schluessel(zeile.runde);
     const e = zeile.eintrag;
     const zeit = e && e.zeit ? uhrzeit(new Date(e.zeit)) : '';
@@ -225,7 +266,30 @@ function renderZeitleiste(jetzt) {
       <span class="zeile-text"><span class="zeile-status">außer der Reihe</span><span class="zeile-detail">${esc(detail)}</span></span>
     </button></li>` };
   });
-  $('zeitleiste').innerHTML = [...runden, ...extra].sort((a, b) => a.t - b.t).map((x) => x.html).join('');
+  const alle = [...runden, ...extra].sort((a, b) => a.t - b.t);
+  $('zeitleiste').innerHTML = alle.length ? alle.map((x) => x.html).join('') : '<li class="leer-zeile">Keine Einträge an diesem Tag.</li>';
+}
+
+/** Zeitleiste im Modus „Nach Anzahl“: eingetragene Gaben, heute dazu, was als Nächstes dran ist. */
+function gabenZeilen(tag, jetzt) {
+  const zeilen = gabenAm(z.gaben, tag).map((g) => {
+    const d = new Date(g.zeit);
+    const detail = mittelText(z.plan, g.mittel) + (g.notiz ? ` · ${g.notiz}` : '');
+    return { t: d.getTime(), html: `<li><button class="zeile erledigt uhr" data-aktion="gabe" data-zeit="${g.zeit}">
+      <span class="zeile-stunde">${uhrzeit(d)}</span>${glyph('erledigt')}
+      <span class="zeile-text"><span class="zeile-status">getropft</span><span class="zeile-detail">${esc(detail)}</span></span>
+    </button></li>` };
+  });
+  if (tagesSchluessel(tag) !== tagesSchluessel(jetzt)) return zeilen;
+  const v = gabeVorschlag(anzahlStand(z, jetzt));
+  if (v.ids.length) {
+    const t = v.frueh ? v.um.getTime() : jetzt.getTime() + 1;
+    zeilen.push({ t, html: `<li><button class="zeile ${v.frueh ? 'kommt' : 'faellig jetzt'} uhr" data-aktion="gabe-neu" data-ids="${esc(v.ids.join(' '))}">
+      <span class="zeile-stunde">${v.frueh ? `~${uhrzeit(v.um)}` : 'jetzt'}</span>${glyph(v.frueh ? 'kommt' : 'faellig')}
+      <span class="zeile-text"><span class="zeile-status">${v.frueh ? 'als Nächstes' : 'fällig'}</span><span class="zeile-detail">${esc(mittelText(z.plan, v.ids))}</span></span>
+    </button></li>` });
+  }
+  return zeilen;
 }
 
 // ---------- Sheets ----------
@@ -408,7 +472,7 @@ function extraSheet(zeitAlt) {
   const gewaehlt = new Set(alt ? alt.mittel : []);
   const bezug = alt ? new Date(alt.zeit) : new Date();
   sheetOeffnen(alt ? 'Außer der Reihe' : 'Extra getropft', `
-    <p class="leise">Für Tropfen außerhalb des Plans, z. B. wenn einer gleich wieder ausgelaufen ist. Zählt nicht als Runde.</p>
+    <p class="leise">Für Tropfen außerhalb des Plans, z. B. wenn einer gleich wieder ausgelaufen ist. ${anzahlModus() ? 'Zählt nicht zur Anzahl am Tag.' : 'Zählt nicht als Runde.'}</p>
     ${schalterListe(z.plan.mittel.map((m) => ({ id: m.id, name: m.name, art: m.art, an: gewaehlt.has(m.id) }))).replace("schalter-liste", "schalter-liste auswahl")}
     <div class="feld"><label for="x-anderes">Anderes Mittel</label>
       <input id="x-anderes" type="text" autocapitalize="sentences" placeholder="optional" value="${esc(alt && alt.anderes || '')}"></div>
@@ -437,6 +501,69 @@ function extraSheet(zeitAlt) {
     loeschen: () => {
       merken();
       z.extra = z.extra.filter((x) => x !== alt);
+      speichern(); sheetSchliessen(); render();
+      toast('Eintrag gelöscht');
+    }
+  });
+}
+
+// ---------- Nach Anzahl: Gaben ----------
+
+function gabeSpeichern(zeit, ids, notiz = '', alt = null) {
+  const g = gabeErfassen(zeit, ids, notiz);
+  if (!g) return false;
+  merken();
+  if (alt) z.gaben = z.gaben.filter((x) => x !== alt);
+  z.gaben.push(g);
+  speichern(); render();
+  toast(`${mittelText(z.plan, g.mittel)} · ${uhrzeit(zeit)}`);
+  return true;
+}
+
+/** Hauptknopf: das Vorgeschlagene mit der Uhrzeit von jetzt eintragen. */
+function gabeJetzt() {
+  const v = gabeVorschlag(anzahlStand(z, new Date()));
+  if (!v.ids.length) { gabeSheet(null, []); return; }
+  if (!v.frueh) { gabeSpeichern(new Date(), v.ids); return; }
+  bestaetigen({
+    titel: 'Trotzdem jetzt eintragen?',
+    text: `${esc(mittelText(z.plan, v.ids))} ${v.ids.length > 1 ? 'sind' : 'ist'} erst gegen ${uhrzeit(v.um)} dran. Für eine andere Auswahl „Auswahl …“ nehmen.`,
+    ja: 'Trotzdem eintragen'
+  }, () => gabeSpeichern(new Date(), v.ids));
+}
+
+function gabeSheet(zeitAlt, vorauswahl = []) {
+  const alt = zeitAlt ? z.gaben.find((g) => g.zeit === zeitAlt) : null;
+  if (zeitAlt && !alt) return;
+  const gewaehlt = new Set(alt ? alt.mittel : vorauswahl);
+  const bezug = alt ? new Date(alt.zeit) : new Date();
+  const stand = Object.fromEntries(anzahlStand(z, new Date()).map((s) => [s.m.id, s]));
+  const liste = z.plan.mittel.filter((m) => proTag(m) > 0 || gewaehlt.has(m.id));
+  // Mittel aus einem früheren Plan, die in der Gabe stehen, bleiben sichtbar
+  for (const id of gewaehlt) if (!liste.some((m) => m.id === id)) liste.push(mittelNach(z.plan, id));
+  sheetOeffnen(alt ? 'Gabe' : 'Getropft', `
+    <p class="leise">${alt ? bezug.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Was hast du getropft?'}</p>
+    ${schalterListe(liste.map((m) => ({
+      id: m.id, name: m.name, art: m.art, an: gewaehlt.has(m.id),
+      zusatz: !alt && stand[m.id] ? `${stand[m.id].ist}/${stand[m.id].soll}` : ''
+    }))).replace('schalter-liste', 'schalter-liste auswahl')}
+    <div class="feld"><label for="g-zeit">Uhrzeit</label><input id="g-zeit" type="time" value="${feldZeit(bezug.toISOString())}"></div>
+    <div class="visite-notiz-feld"><label for="g-notiz">Notiz (optional)</label>
+      <textarea id="g-notiz" rows="2" autocapitalize="sentences">${esc(alt && alt.notiz || '')}</textarea></div>
+    <p class="leise" id="g-hinweis" hidden>Bitte mindestens ein Mittel wählen.</p>
+    <div class="knoepfe"><button class="knopf primaer" data-aktion="speichern">${alt ? 'Speichern' : 'Eintragen'}</button></div>
+    ${alt ? '<div class="knoepfe abstand-gross"><button class="knopf gefahr" data-aktion="loeschen">Eintrag löschen</button></div>' : ''}`, {
+    schalter: (el) => { if (schalterUmlegen(el)) gewaehlt.add(el.dataset.id); else gewaehlt.delete(el.dataset.id); },
+    speichern: () => {
+      const zeit = extraZeit(bezug, $('g-zeit').value, !alt) || bezug;
+      const ids = liste.map((m) => m.id).filter((id) => gewaehlt.has(id));
+      if (!ids.length) { $('g-hinweis').hidden = false; return; }
+      sheetSchliessen();
+      gabeSpeichern(zeit, ids, $('g-notiz').value, alt);
+    },
+    loeschen: () => {
+      merken();
+      z.gaben = z.gaben.filter((x) => x !== alt);
       speichern(); sheetSchliessen(); render();
       toast('Eintrag gelöscht');
     }
@@ -592,10 +719,22 @@ function einstellungenSheet() {
   const e = z.einstellungen;
   const stundenOptionen = (wert) => Array.from({ length: 24 }, (_, h) => `<option value="${h}"${h === Number(wert) ? ' selected' : ''}>${h} Uhr</option>`).join('');
   const modi = [['immer', 'Dunkel'], ['auto', 'Automatisch'], ['nie', 'Hell']];
+  const anzahl = anzahlModus();
+  const planZusatz = (m) => anzahl
+    ? (proTag(m) > 0 ? `${proTag(m)}× täglich` : 'wird nicht gezählt')
+    : `${stundenText(m.stunden)}${m.nachholbar === false ? '' : ' · nachholbar'}`;
   sheetOeffnen('Einstellungen', `
+    <h3>Tropfen</h3>
+    <div class="segment zwei" role="group" aria-label="Wie getropft wird">
+      ${[['zeiten', 'Feste Uhrzeiten'], ['anzahl', 'Nach Anzahl']].map(([w, l]) => `<button data-aktion="tropfmodus" data-wert="${w}" aria-pressed="${(e.modus || 'zeiten') === w}">${l}</button>`).join('')}
+    </div>
+    <p class="leise">${anzahl
+      ? 'Keine festen Runden: Du trägst ein, wann du was getropft hast. Die App zählt mit und schlägt vor, wann es gleichmäßig verteilt als Nächstes dran ist.'
+      : 'Runden zu festen Uhrzeiten laut Plan. Ein Tipp trägt die ganze Runde ein.'}</p>
+
     <h3>Plan</h3>
     ${z.plan.beispiel ? '<p class="leise">Das ist ein Beispielplan.</p>' : ''}
-    <ul class="plan-liste">${z.plan.mittel.map((m) => `<li>${artIcon(m.art)}<span>${esc(m.name)}<small>${stundenText(m.stunden)}${m.nachholbar === false ? '' : ' · nachholbar'}</small></span></li>`).join('')}</ul>
+    <ul class="plan-liste">${z.plan.mittel.map((m) => `<li>${artIcon(m.art)}<span>${esc(m.name)}<small>${planZusatz(m)}</small></span></li>`).join('')}</ul>
     <div class="knoepfe"><button class="knopf" data-aktion="importieren">Plan importieren</button></div>
 
     <h3>Darstellung</h3>
@@ -604,6 +743,12 @@ function einstellungenSheet() {
     </div>
     <p class="leise">Automatisch: dunkel von 21 bis 7 Uhr und wenn das iPhone dunkel eingestellt ist.</p>
 
+    ${anzahl ? `
+    <h3>Verteilung über den Tag</h3>
+    <div class="feld"><label for="s-tag-von">Erste Gabe ab</label><select id="s-tag-von">${stundenOptionen(e.tagVon)}</select></div>
+    <div class="feld"><label for="s-tag-bis">Letzte Gabe bis</label><select id="s-tag-bis">${stundenOptionen(e.tagBis)}</select></div>
+    <p class="leise">Danach richtet sich der Vorschlag für die nächste Gabe: höchstens 24 Stunden geteilt durch die Anzahl, aber so, dass der Rest bis zur letzten Gabe passt.</p>
+    ` : `
     <h3>Zuordnung</h3>
     <div class="feld"><label for="s-frueh">Bis so viele Minuten vor der Runde zählt ein Tipp noch dazu</label>
       <input id="s-frueh" type="number" inputmode="numeric" min="0" max="59" value="${e.frueh}"></div>
@@ -617,6 +762,7 @@ function einstellungenSheet() {
     <p class="leise">Erzeugt zu jeder Runde laut Plan einen täglichen 5-Minuten-Termin „Augentropfen“ mit Hinweis.
       Im Teilen-Menü „Kalender“ wählen oder „In Dateien sichern“ und die Datei dort antippen, dann „Alle hinzufügen“.
       Tipp: in einen eigenen Kalender „Tropfen“ übernehmen. Zum Entfernen löschst du später einfach diesen Kalender.</p>
+    `}
 
     <h3>Daten</h3>
     <p class="leise">${backupText()}</p>
@@ -631,6 +777,14 @@ function einstellungenSheet() {
       z.einstellungen.dunkel = el.dataset.wert;
       speichern(); render();
       for (const b of $('sheet').querySelectorAll('[data-aktion="modus"]')) b.setAttribute('aria-pressed', String(b === el));
+    },
+    tropfmodus: (el) => {
+      if (z.einstellungen.modus === el.dataset.wert) return;
+      merken();
+      z.einstellungen.modus = el.dataset.wert;
+      speichern(); render();
+      einstellungenSheet();
+      toast(el.dataset.wert === 'anzahl' ? 'Nach Anzahl tropfen' : 'Feste Uhrzeiten');
     },
     importieren: () => $('datei').click(),
     ics: async () => {
@@ -655,6 +809,12 @@ function einstellungenSheet() {
     const n = Math.max(0, Math.min(59, Math.round(Number(ev.target.value))));
     if (Number.isFinite(n)) { z.einstellungen[feld] = n; ev.target.value = n; speichern(); render(); }
   });
+  if (anzahl) {
+    for (const [id, feld] of [['s-tag-von', 'tagVon'], ['s-tag-bis', 'tagBis']]) {
+      $(id).addEventListener('change', (ev) => { z.einstellungen[feld] = Number(ev.target.value); speichern(); render(); });
+    }
+    return;
+  }
   zahl('s-frueh', 'frueh');
   zahl('s-spaet', 'spaet');
   for (const [id, feld] of [['s-von', 'erinnerungVon'], ['s-bis', 'erinnerungBis']]) {
@@ -754,9 +914,10 @@ $('datei').addEventListener('change', async (ev) => {
     }, () => { merken(); z.plan = ergebnis.plan; speichern(); render(); toast('Plan übernommen'); });
   } else {
     const n = Object.keys(ergebnis.zustand.runden).length;
+    const g = ergebnis.zustand.gaben.length;
     bestaetigen({
       titel: 'Backup einspielen?',
-      text: `Das Backup enthält ${n} Runden. Es ersetzt alle Daten auf diesem Gerät.`,
+      text: `Das Backup enthält ${n} Runden${g ? ` und ${g} Gaben` : ''}. Es ersetzt alle Daten auf diesem Gerät.`,
       ja: 'Backup einspielen'
     }, () => { merken(); z = ergebnis.zustand; speichern(); render(); toast('Backup eingespielt'); });
   }
@@ -765,8 +926,10 @@ $('datei').addEventListener('change', async (ev) => {
 // ---------- Ereignisse ----------
 
 const aktionen = {
-  alles: () => erfassenStart([]),
-  'nicht-alles': nichtAllesSheet,
+  alles: () => (anzahlModus() ? gabeJetzt() : erfassenStart([])),
+  'nicht-alles': () => (anzahlModus() ? gabeSheet(null, gabeVorschlag(anzahlStand(z, new Date())).ids) : nichtAllesSheet()),
+  gabe: (el) => gabeSheet(el.dataset.zeit),
+  'gabe-neu': (el) => gabeSheet(null, el.dataset.ids.split(' ')),
   'extra-neu': () => extraSheet(null),
   extra: (el) => extraSheet(el.dataset.zeit),
   rueckgaengig,
