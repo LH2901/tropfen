@@ -155,7 +155,7 @@ main {
 .stand-info { color: var(--text-2); font-size: 0.9375rem; line-height: 1.3; }
 .stand.faellig .stand-info { color: var(--akzent-tinte); font-weight: 600; }
 .stand.fertig .stand-name { color: var(--text-2); }
-.stand-punkte { display: flex; gap: 5px; }
+.stand-punkte { display: flex; flex-wrap: wrap; gap: 5px; }
 .stand-punkte i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--text-2); }
 .stand-punkte i.voll { background: var(--text); border-color: var(--text); }
 .stand-zahl {

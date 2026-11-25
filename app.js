@@ -10,7 +10,7 @@ import {
   proTag, gabeErfassen, gabenAm, anzahlStand, gabeVorschlag, mittelText
 } from './logik.js';
 
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.5.1';
 const SPEICHER_KEY = 'tropfen';
 const UEBERFAELLIG_NACH = 15; // Minuten nach der vollen Stunde
 
@@ -122,6 +122,8 @@ function render() {
     renderOffen(jetzt);
   }
   document.querySelector('.leiste [data-aktion="nicht-alles"]').textContent = anzahlModus() ? 'Auswahl …' : 'Nicht alles …';
+  // Nach Anzahl wird zu Hause getropft: dort gibt es weder Klinikessen noch Visite
+  $('essen-visite').hidden = anzahlModus();
   renderEreignisse(jetzt);
   renderZeitleiste(jetzt);
   $('beispiel').hidden = !z.plan.beispiel;
@@ -729,7 +731,7 @@ function einstellungenSheet() {
       ${[['zeiten', 'Feste Uhrzeiten'], ['anzahl', 'Nach Anzahl']].map(([w, l]) => `<button data-aktion="tropfmodus" data-wert="${w}" aria-pressed="${(e.modus || 'zeiten') === w}">${l}</button>`).join('')}
     </div>
     <p class="leise">${anzahl
-      ? 'Keine festen Runden: Du trägst ein, wann du was getropft hast. Die App zählt mit und schlägt vor, wann es gleichmäßig verteilt als Nächstes dran ist.'
+      ? 'Keine festen Runden: Du trägst ein, wann du was getropft hast. Die App zählt mit und schlägt vor, wann es gleichmäßig verteilt als Nächstes dran ist. Essen und Visite sind dabei ausgeblendet.'
       : 'Runden zu festen Uhrzeiten laut Plan. Ein Tipp trägt die ganze Runde ein.'}</p>
 
     <h3>Plan</h3>

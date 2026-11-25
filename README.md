@@ -58,7 +58,7 @@ Der Plan wird als JSON-Datei importiert und steht nicht im Code:
 Einstellungen → **Tropfen** schaltet um:
 
 - **Feste Uhrzeiten**: Runden zu den Stunden laut Plan; ein Tipp trägt die ganze Runde ein.
-- **Nach Anzahl**: keine festen Runden. Du trägst ein, wann du was getropft hast. Die App zeigt je Mittel, wie oft es heute schon war, und schlägt die nächste Gabe gleichmäßig verteilt vor (Abstand höchstens 24 h geteilt durch die Anzahl, aber so, dass der Rest bis zur eingestellten letzten Gabe passt; mindestens 1 Stunde). Was fällig ist, trägt der große Knopf mit einem Tipp ein; „Auswahl …“ für eine andere Auswahl oder Uhrzeit.
+- **Nach Anzahl**: keine festen Runden. Du trägst ein, wann du was getropft hast. Die App zeigt je Mittel, wie oft es heute schon war, und schlägt die nächste Gabe gleichmäßig verteilt vor (Abstand höchstens 24 h geteilt durch die Anzahl, aber so, dass der Rest bis zur eingestellten letzten Gabe passt; mindestens 1 Stunde). Was fällig ist, trägt der große Knopf mit einem Tipp ein; „Auswahl …“ für eine andere Auswahl oder Uhrzeit. Essen und Visite sind in diesem Modus ausgeblendet.
 
 ## Entwicklung
 
