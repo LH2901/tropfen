@@ -391,11 +391,12 @@ export const uhrzeit = (d) => `${d.getHours()}:${pad(d.getMinutes())}`;
 export const minutenAlsUhrzeit = (min) => `${Math.floor(min / 60)}:${pad(min % 60)}`;
 export const rundenName = (runde) => `${runde.getHours()}-Uhr-Runde`;
 
+// Geschützte Leerzeichen: „1 h 35 min“ bricht nie mitten in der Angabe um
 export function dauer(minuten) {
-  if (minuten < 60) return `${minuten} min`;
+  if (minuten < 60) return `${minuten} min`;
   const h = Math.floor(minuten / 60);
   const m = minuten % 60;
-  return m ? `${h} h ${m} min` : `${h} h`;
+  return m ? `${h} h ${m} min` : `${h} h`;
 }
 
 export function ueblichText(u) {

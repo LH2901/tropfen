@@ -10,7 +10,7 @@ import {
   proTag, gabeErfassen, gabenAm, anzahlStand, gabeVorschlag, mittelText
 } from './logik.js';
 
-const APP_VERSION = '1.5.1';
+const APP_VERSION = '1.5.2';
 const SPEICHER_KEY = 'tropfen';
 const UEBERFAELLIG_NACH = 15; // Minuten nach der vollen Stunde
 
@@ -181,18 +181,19 @@ function standInfo(s, jetzt) {
     const seit = Math.floor((jetzt - s.naechste) / 60000);
     wann = seit < 0 ? `fällig ~${uhrzeit(s.naechste)}` : seit < 5 ? 'jetzt fällig' : `fällig seit ${dauer(seit)}`;
   }
-  return [zuletzt, wann].filter(Boolean).join(' · ');
+  // Jede Angabe bleibt am Stück, umgebrochen wird nur am Mittelpunkt
+  return [zuletzt, wann].filter(Boolean).map((t) => `<span class="nw">${t}</span>`).join(' · ');
 }
 
 function renderStand(jetzt) {
   const stand = anzahlStand(z, jetzt);
   const v = gabeVorschlag(stand);
   $('naechste').innerHTML = `
-    <p class="naechste-label">Heute</p>
+    <p class="naechste-label">Stand heute</p>
     ${stand.length ? `<ul class="stand-liste">${stand.map((s) => `<li class="stand ${s.status}">
       ${artIcon(s.m.art)}
       <span class="stand-text"><span class="stand-name">${esc(s.m.name)}</span>
-        <span class="stand-punkte" aria-hidden="true">${Array.from({ length: s.soll }, (_, i) => `<i${i < s.ist ? ' class="voll"' : ''}></i>`).join('')}</span>
+        <span class="stand-punkte" aria-hidden="true">${Array.from({ length: s.soll }, (_, i) => `<svg viewBox="0 0 24 24"${i < s.ist ? ' class="voll"' : ''}><path d="${TROPFEN}"/></svg>`).join('')}</span>
         <span class="stand-info">${standInfo(s, jetzt)}</span></span>
       <span class="stand-zahl" aria-label="${s.ist} von ${s.soll}">${s.ist}<small>/${s.soll}</small></span>
     </li>`).join('')}</ul>` : '<p class="notiz">Im Plan steht bei keinem Mittel, wie oft am Tag.</p>'}`;
@@ -276,10 +277,10 @@ function renderZeitleiste(jetzt) {
 function gabenZeilen(tag, jetzt) {
   const zeilen = gabenAm(z.gaben, tag).map((g) => {
     const d = new Date(g.zeit);
-    const detail = mittelText(z.plan, g.mittel) + (g.notiz ? ` · ${g.notiz}` : '');
+    // Was getropft wurde, steht vorn; der volle Tropfen sagt schon „erledigt“
     return { t: d.getTime(), html: `<li><button class="zeile erledigt uhr" data-aktion="gabe" data-zeit="${g.zeit}">
       <span class="zeile-stunde">${uhrzeit(d)}</span>${glyph('erledigt')}
-      <span class="zeile-text"><span class="zeile-status">getropft</span><span class="zeile-detail">${esc(detail)}</span></span>
+      <span class="zeile-text"><span class="zeile-status">${esc(mittelText(z.plan, g.mittel))}</span>${g.notiz ? `<span class="zeile-detail">${esc(g.notiz)}</span>` : ''}</span>
     </button></li>` };
   });
   if (tagesSchluessel(tag) !== tagesSchluessel(jetzt)) return zeilen;
